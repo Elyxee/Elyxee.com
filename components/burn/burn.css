@@ -1,0 +1,24 @@
+/* Elyxee burn effect — full-bleed WebGL surface, sits under the cursor canvas */
+#burn-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  contain: strict;
+  transition: opacity 240ms ease;
+}
+
+#burn-fx.is-ready {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #burn-fx {
+    transition-duration: 0.01ms;
+  }
+}
