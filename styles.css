@@ -1,0 +1,40 @@
+/* Minimal page shell — cursor visuals live in components/cursor/ */
+:root {
+  color-scheme: dark;
+  --paper: #141210;
+  --ink: #f0ebe3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  position: relative;
+  background:
+    radial-gradient(circle at 72% 28%, rgba(90, 28, 12, 0.28), transparent 34%),
+    radial-gradient(circle at 18% 78%, rgba(40, 18, 10, 0.5), transparent 42%),
+    linear-gradient(145deg, #1c1713 0%, var(--paper) 55%, #0d0b09 100%);
+  color: var(--ink);
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(240, 235, 227, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240, 235, 227, 0.03) 1px, transparent 1px);
+  background-size: 72px 72px;
+  content: "";
+  mask-image: radial-gradient(circle at center, black, transparent 82%);
+  pointer-events: none;
+}
