@@ -50,8 +50,8 @@ export const BURN_SETTINGS = {
   dprCap: 2,
 };
 
-const DEFAULT_FIRE = new URL("../../Assets/Fire.jpg", import.meta.url).href;
-const DEFAULT_ICE = new URL("../../Assets/Ice.png", import.meta.url).href;
+const DEFAULT_FIRE = new URL("../../Assets/background/Fire.jpg", import.meta.url).href;
+const DEFAULT_ICE = new URL("../../Assets/background/Ice.png", import.meta.url).href;
 const STYLE_HREF = new URL("./burn.css", import.meta.url).href;
 
 const QUAD = new Float32Array([-1, -1, 3, -1, -1, 3]);
