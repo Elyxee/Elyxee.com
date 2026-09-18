@@ -18,14 +18,17 @@
 }
 
 /* Recovering: the pointer is only the cold presence drawn in the burn pass.
-   Hide the flame cursor canvas entirely — no stacked fire glow on top of frost. */
+   Hide the flame cursor canvas entirely — no stacked fire glow on top of frost.
+   It goes out over the first half of the quench, holding for a moment and then
+   sinking, so it crossfades with the coal the burn pass draws in its place. */
 html[data-burn-phase="recovering"] #cursor-fx {
   opacity: 0 !important;
-  transition: opacity 280ms ease;
+  transition: opacity 620ms cubic-bezier(0.35, 0, 0.75, 0.35);
 }
 
+/* Coming back, the burst's flash leads and the flame arrives just behind it. */
 html:not([data-burn-phase="recovering"]) #cursor-fx {
-  transition: opacity 220ms ease;
+  transition: opacity 260ms cubic-bezier(0.2, 0.7, 0.4, 1) 120ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

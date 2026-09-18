@@ -1,4 +1,4 @@
-import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js?v=33";
+import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js?v=34";
 
 // Every rate is per second so behaviour is frame-rate independent.
 export const BURN_SETTINGS = {
@@ -79,7 +79,7 @@ export const BURN_SETTINGS = {
 
 const DEFAULT_FIRE = new URL("../../Assets/background/Fire.jpg", import.meta.url).href;
 const DEFAULT_ICE = new URL("../../Assets/background/Ice.png", import.meta.url).href;
-const STYLE_HREF = new URL("./burn.css?v=33", import.meta.url).href;
+const STYLE_HREF = new URL("./burn.css?v=34", import.meta.url).href;
 
 const QUAD = new Float32Array([-1, -1, 3, -1, -1, 3]);
 
@@ -249,6 +249,12 @@ function createImageTexture(gl, image) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+// Smoothstep on an already-normalised 0..1 value, for transition envelopes that
+// have to leave and arrive at rest rather than at a constant rate.
+function ease(t) {
+  return t * t * (3 - 2 * t);
 }
 
 export function initBurn(options = {}) {
@@ -495,6 +501,9 @@ export function initBurn(options = {}) {
   // The first fire has taken the sheet; the hold is running and the cold
   // presence follows once healing actually starts.
   let sheetTaken = false;
+  // Strength of the presence when the current transition began, so it can be
+  // carried into or out of the transition instead of cutting.
+  let coldFrom = 0;
   // Smoothed pointer velocity (uv per second) — rises quickly, decays slowly,
   // so the cloud keeps moving for a moment after the pointer stops.
   let velX = 0;
@@ -507,17 +516,19 @@ export function initBurn(options = {}) {
     document.documentElement.dataset.burnPhase = next;
     if (prev !== next) {
       if (next === "recovering") {
-        // Cold takes the pointer completely: flame canvas is hidden via CSS on
-        // data-burn-phase, and the presence is fully on from this frame.
+        // Cold takes the pointer completely — the flame canvas is hidden via CSS
+        // on data-burn-phase — but it arrives along the transition rather than
+        // in a single frame.
         pulse = 1;
         pulseKind = 1;
-        interact = pointer.active > 0.03 ? 1 : 0;
+        coldFrom = interact;
       } else if (prev === "recovering") {
-        // Reignite: cold is gone immediately, burst plays, flame canvas returns.
-        // The first-fire latch is done — later burns must be able to write heat.
+        // Reignite: the burst carries the cold off, and by the end of it nothing
+        // of the presence is left. The first-fire latch is done here too — later
+        // burns must be able to write heat.
         pulse = 1;
         pulseKind = -1;
-        interact = 0;
+        coldFrom = interact;
         sheetTaken = false;
       }
     }
@@ -719,16 +730,28 @@ export function initBurn(options = {}) {
       setPhase("recovering");
     }
 
-    // Outside recovering the presence is hard-off (setPhase already cleared it).
-    // Inside, follow the pointer — no soft lag that would leave cold on a flame
-    // or flame on cold.
+    // The presence rides the transitions: it gathers as the flame gutters and is
+    // blown away by the burst, on the same eased curves the shader draws, rather
+    // than switching on and off in a single frame. Outside a transition it is
+    // simply on during recovery and off everywhere else, so cold is never left
+    // over a flame or flame over cold.
+    const present = pointer.active > 0.03 ? 1 : 0;
+    const transitionProgress = ease(1 - pulse);
     if (phase === "recovering") {
-      const interactTarget = pointer.active > 0.03 ? 1 : 0;
-      interact += (interactTarget - interact) * clamp(deltaSeconds * 8, 0, 1);
-      if (interact < 0.001) interact = 0;
+      if (pulseKind > 0 && pulse > 0) {
+        // Lags the flame's dying: the frost has nothing to fill until it has.
+        const gathered = ease(clamp((1 - pulse - 0.22) / 0.68, 0, 1));
+        interact = Math.max(coldFrom * (1 - transitionProgress), present * gathered);
+      } else {
+        interact += (present - interact) * clamp(deltaSeconds * 8, 0, 1);
+        if (interact < 0.001) interact = 0;
+      }
+    } else if (pulseKind < 0 && pulse > 0) {
+      interact = coldFrom * (1 - ease(clamp((1 - pulse) / 0.55, 0, 1)));
     } else {
       interact = 0;
     }
+    if (interact < 0.001) interact = 0;
     if (pulse > 0) {
       const seconds = pulseKind > 0 ? settings.quenchSeconds : settings.reigniteSeconds;
       pulse = Math.max(0, pulse - deltaSeconds / Math.max(0.2, seconds));

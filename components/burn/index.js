@@ -1,1 +1,1 @@
-export { initBurn, BURN_SETTINGS } from "./burn.js?v=33";
+export { initBurn, BURN_SETTINGS } from "./burn.js?v=34";

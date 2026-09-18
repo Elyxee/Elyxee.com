@@ -644,41 +644,75 @@ void main() {
   float crystals = smoothstep(0.86, 0.98, texture2D(uNoise, apSwirl * 34.0 + vec2(0.31, 0.77)).b);
   color += frost * crystals * aura * eye * 0.55;
 
-  // Phase change, at cursor scale.
+  // Phase change, at cursor scale. Both directions are built out of overlapping
+  // eased stages, so no part of either one starts or stops on a hard edge, and
+  // both are broken up by a noise field sampled on the direction to the pointer
+  // — that varies with angle but not with radius, which tears the shapes into
+  // tongues and streaks radiating from the cursor instead of leaving concentric
+  // rings. The field turns slowly so the tongues are never in the same place.
   float prog = 1.0 - uPulse;
   float toCold = step(0.0, uPulseKind);
-  vec3 transition = vec3(0.0);
   if (uPulse > 0.0) {
-    // Quench: the flame gutters. It shrinks, reddens to a dull coal, then the
-    // cold takes it and it goes blue-white, with a puff of vapour lifting off.
-    float coreR2 = 0.0009 * mix(1.0, 0.30, prog);
-    float core = exp(-pd * pd / coreR2);
-    vec3 gutter = mix(hot, vec3(0.55, 0.06, 0.02), smoothstep(0.10, 0.50, prog));
-    gutter = mix(gutter, frost, smoothstep(0.50, 0.92, prog));
-    float sputter = 0.70 + 0.30 * sin(uTime * 38.0 + pd * 90.0);
-    vec3 quench = gutter * core * (1.0 - 0.55 * prog) * sputter * 1.7;
-    vec2 puffP = toP - vec2(0.0, prog * 0.055);
-    float puffR = 0.018 + 0.070 * prog;
-    float puffN = texture2D(uNoise, (ap + vec2(0.0, -uTime * 0.06)) * 13.0).g;
+    float spinA = uTime * 0.35;
+    vec2 rr = vec2(radial.x * cos(spinA) - radial.y * sin(spinA),
+                   radial.x * sin(spinA) + radial.y * cos(spinA));
+    float lobe = texture2D(uNoise, rr * 0.42 + 0.5).r;
+    float grain = texture2D(uNoise, rr * 1.70 + 0.5).a;
+    // Eases the whole thing off over the tail, so a transition can never be
+    // caught mid-stride and leave anything of itself behind.
+    float env = smoothstep(0.0, 0.30, uPulse);
+
+    // Flame → cold. The flame sinks to a coal while the cold gathers and closes
+    // in around it; where the front has passed, the air is left frosted, which
+    // is what hands the pointer over to the presence proper.
+    float dieOut = smoothstep(0.00, 0.60, prog);
+    float frostIn = smoothstep(0.28, 0.96, prog);
+    // Rises as the flame canvas fades and is gone before the frost settles, so
+    // the two never double up into one bright blob.
+    float coal = smoothstep(0.0, 0.26, prog) * (1.0 - smoothstep(0.44, 0.95, prog));
+    float coreR = mix(0.034, 0.008, dieOut * dieOut);
+    float core = exp(-(pd * pd) / (coreR * coreR));
+    float sputter = 0.58 + 0.42 * sin(uTime * 24.0 + lobe * 14.0);
+    vec3 dying = mix(hot, vec3(0.40, 0.05, 0.014), dieOut);
+    vec3 quench = dying * core * coal * mix(1.0, sputter, dieOut) * 2.1;
+    // The cold front, converging with a torn edge rather than as a ring.
+    float frontR = mix(0.21, 0.0, frostIn) * (0.74 + 0.52 * lobe);
+    float ft = (pd - frontR) / 0.028;
+    float front = exp(-ft * ft) * frostIn * (1.0 - 0.30 * frostIn);
+    quench += frost * front * (0.70 + 0.50 * grain);
+    // Vapour lifting off the flame as it goes out.
+    vec2 puffP = toP - vec2(0.0, prog * 0.05);
+    float puffR = 0.016 + 0.062 * prog;
+    float puffN = texture2D(uNoise, (ap + vec2(0.0, -uTime * 0.06)) * 12.0).g;
     float puff = exp(-dot(puffP, puffP) / (puffR * puffR))
-      * smoothstep(0.30, 0.78, puffN + 0.25 * prog)
-      * (1.0 - prog) * smoothstep(0.0, 0.25, prog);
-    quench += frost * puff * 0.85;
+      * smoothstep(0.34, 0.80, puffN + 0.22 * prog)
+      * smoothstep(0.0, 0.30, prog) * (1.0 - smoothstep(0.58, 1.0, prog));
+    quench += frost * puff * 0.80;
 
-    // Reignite: a burst. A hard flash at the eye, then sparks flung outward
-    // that go out as they travel.
-    float flash = exp(-pd * pd / 0.0022) * pow(1.0 - prog, 3.0);
-    float sparkR = 0.012 + 0.125 * prog;
-    float sparkRing = exp(-pow((pd - sparkR) / 0.016, 2.0));
-    float sparkN = texture2D(uNoise, apSwirl * 23.0 + vec2(0.71, 0.19)).a;
-    float sparks = sparkRing * smoothstep(0.52, 0.80, sparkN) * (1.0 - prog) * (1.0 - prog);
-    float glowR2 = 0.006;
-    float glow = exp(-pd * pd / glowR2) * (1.0 - prog) * 0.5;
-    vec3 burst = hot * (flash * 2.4 + glow) + vec3(1.0, 0.78, 0.40) * sparks * 1.5;
+    // Cold → flame. A short inhale gathers at the eye, then the frost is blown
+    // out on a shock of embers that tears into streaks and spends itself.
+    float charge = smoothstep(0.0, 0.20, prog);
+    float blow = smoothstep(0.16, 1.0, prog);
+    float spend = 1.0 - smoothstep(0.50, 1.0, prog);
+    float flash = exp(-(pd * pd) / (0.011 * 0.011)) * (1.0 - smoothstep(0.06, 0.40, prog));
+    float ignite = exp(-(pd * pd) / (0.026 * 0.026)) * charge * (1.0 - 0.50 * blow);
+    float shockR = (0.014 + 0.150 * blow) * (0.72 + 0.56 * lobe);
+    float shockW = 0.011 + 0.026 * blow;
+    float st = (pd - shockR) / shockW;
+    float shock = exp(-st * st) * spend;
+    float sparks = shock * smoothstep(0.52, 0.90, grain + 0.20 * lobe);
+    vec3 burst = hot * (flash * 2.4 + ignite * 1.6 + shock * 0.85)
+      + vec3(1.0, 0.80, 0.45) * sparks * 1.7
+      // The frost being displaced flares blue-white at the front for an instant.
+      + frost * shock * (1.0 - blow) * 0.65;
 
-    transition = mix(burst, quench, toCold) * uPulse;
+    // The chill left in the front's wake, so the presence does not have to
+    // arrive out of nothing.
+    float chilled = (1.0 - smoothstep(0.15, 0.24, pd))
+      * smoothstep(frontR - 0.03, frontR + 0.02, pd) * frostIn * toCold * env;
+    color = mix(color, color * vec3(0.82, 0.94, 1.16), chilled * 0.50);
+    color += mix(burst, quench, toCold) * env;
   }
-  color += transition;
   gl_FragColor = vec4(color, 1.0);
 }
 `;
