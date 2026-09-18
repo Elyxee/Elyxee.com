@@ -1,4 +1,4 @@
-import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js?v=34";
+import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js?v=35";
 
 // Every rate is per second so behaviour is frame-rate independent.
 export const BURN_SETTINGS = {
@@ -79,7 +79,7 @@ export const BURN_SETTINGS = {
 
 const DEFAULT_FIRE = new URL("../../Assets/background/Fire.jpg", import.meta.url).href;
 const DEFAULT_ICE = new URL("../../Assets/background/Ice.png", import.meta.url).href;
-const STYLE_HREF = new URL("./burn.css?v=34", import.meta.url).href;
+const STYLE_HREF = new URL("./burn.css?v=35", import.meta.url).href;
 
 const QUAD = new Float32Array([-1, -1, 3, -1, -1, 3]);
 

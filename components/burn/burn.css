@@ -1,4 +1,6 @@
-/* Elyxee burn effect — full-bleed WebGL surface, sits under the cursor canvas */
+/* Elyxee burn effect — full-bleed WebGL surface, sits under the cursor canvas.
+   Body already shows Fire.jpg as a cover underlay, so the canvas snaps on with
+   no fade — first WebGL frame and the CSS sheet are the same picture. */
 #burn-fx {
   position: fixed;
   inset: 0;
@@ -10,7 +12,6 @@
   pointer-events: none;
   user-select: none;
   contain: strict;
-  transition: opacity 240ms ease;
 }
 
 #burn-fx.is-ready {

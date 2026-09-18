@@ -3,6 +3,9 @@
   color-scheme: dark;
   --paper: #141210;
   --ink: #f0ebe3;
+  /* Matches the burn shader's cover crop so the CSS underlay and WebGL
+     first frame read as one surface. */
+  --fire: url("Assets/background/Fire.jpg");
 }
 
 * {
@@ -19,22 +22,11 @@ body {
 
 body {
   position: relative;
-  background:
-    radial-gradient(circle at 72% 28%, rgba(90, 28, 12, 0.28), transparent 34%),
-    radial-gradient(circle at 18% 78%, rgba(40, 18, 10, 0.5), transparent 42%),
-    linear-gradient(145deg, #1c1713 0%, var(--paper) 55%, #0d0b09 100%);
+  /* First paint is the fire sheet itself — no grid shell while WebGL loads. */
+  background-color: #0d0b09;
+  background-image: var(--fire);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: var(--ink);
-}
-
-body::before {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background-image:
-    linear-gradient(rgba(240, 235, 227, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(240, 235, 227, 0.03) 1px, transparent 1px);
-  background-size: 72px 72px;
-  content: "";
-  mask-image: radial-gradient(circle at center, black, transparent 82%);
-  pointer-events: none;
 }
