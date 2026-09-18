@@ -1,0 +1,10 @@
+# Files that must not be published as Workers Static Assets.
+# See: https://developers.cloudflare.com/workers/static-assets/binding/#ignoring-assets
+.git
+.wrangler
+.DS_Store
+**/.DS_Store
+node_modules
+.gitignore
+.assetsignore
+wrangler.jsonc
