@@ -17,8 +17,24 @@
   opacity: 1;
 }
 
+/* Recovering: the pointer is only the cold presence drawn in the burn pass.
+   Hide the flame cursor canvas entirely — no stacked fire glow on top of frost. */
+html[data-burn-phase="recovering"] #cursor-fx {
+  opacity: 0 !important;
+  transition: opacity 280ms ease;
+}
+
+html:not([data-burn-phase="recovering"]) #cursor-fx {
+  transition: opacity 220ms ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #burn-fx {
+    transition-duration: 0.01ms;
+  }
+
+  html[data-burn-phase="recovering"] #cursor-fx,
+  html:not([data-burn-phase="recovering"]) #cursor-fx {
     transition-duration: 0.01ms;
   }
 }

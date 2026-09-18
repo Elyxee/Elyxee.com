@@ -115,6 +115,9 @@ uniform float uAshFade;
 uniform float uHealScale;
 // Extra carbon fade during the mid-recovery ash plateau only.
 uniform float uAshMidFade;
+// Extra heal speed (as a multiple) for texels already under the closed sheet,
+// i.e. the ash veil; 0 leaves the veil on the base rate.
+uniform float uVeilHeal;
 // 1 = first-pass diffusion (fast spread while the source is working).
 // 0 = after a full recovery: burn only where the pointer is.
 uniform float uSpreadMode;
@@ -161,7 +164,12 @@ void main() {
   // Heat only heats material that can actually burn. Lingering in a cleared hole
   // was bathing loose ash in temperature and immediately re-lighting it.
   float sheetFuel = 1.0 - smoothstep(0.52, 0.68, burn);
-  heat += shape * uPointerActive * uInject * fuel * uDt * sheetFuel;
+  // The source gets a harder cut than the front does. The self-spread plateau
+  // settles right in sheetFuel's tail (~0.66), and a few percent of injection
+  // there is enough to hold a warm spot under a resting cursor indefinitely,
+  // which pinned healing around it and kept the sheet in its burning phase.
+  float sourceFuel = 1.0 - smoothstep(0.50, 0.64, burn);
+  heat += shape * uPointerActive * uInject * fuel * uDt * sourceFuel;
   // Direct scorch only lands on sheet that is still present. Dumping damage into
   // an already open hole is what re-seeded black ash flakes inside it whenever
   // the cursor lingered there.
@@ -206,7 +214,10 @@ void main() {
   // or a steep cliff) and reads as an inked outline instead of fire.
   float selfSustain = uSpreadMode * (1.0 - spent) * sheetFuel * alive;
   float pinpointFront = (1.0 - uSpreadMode) * front * alive * underSource;
-  float driven = max(underSource, max(selfSustain, pinpointFront));
+  // Source-driven combustion is cut the same way as injection: the plateau sits
+  // inside the front band, so without a fuel gate a source resting over an open
+  // hole kept combusting nothing at all. Self-sustain already carries sheetFuel.
+  float driven = max(max(underSource, pinpointFront) * sourceFuel, selfSustain);
   heat += front * driven * uCombustion * fuel * uDt;
   heat = min(heat, 1.6);
 
@@ -261,13 +272,19 @@ void main() {
   // opening knit shut well ahead of the rest and leave black patches stranded
   // inside it, since the carbon there outlives the sheet that closed over.
   float healJitter = 0.92 + 0.16 * grain;
-  burn -= uDt * uHealBurn * cold * healJitter * (0.85 + 0.15 * burn) * uHealScale;
+  // Once a texel has dropped under the contour the sheet has closed over it and
+  // only the ash veil remains. That veil can clear faster without touching how
+  // the opening itself knits shut, since the rim's speed is set at the contour.
+  // The boost switches off again as carbon nears the level where the sheet
+  // shows through (~0.18), so the paper's actual return keeps its own pace.
+  float veil = 1.0 + uVeilHeal * smoothstep(0.50, 0.42, burn) * smoothstep(0.12, 0.22, charred);
+  burn -= uDt * uHealBurn * cold * healJitter * (0.85 + 0.15 * burn) * uHealScale * veil;
   burn = clamp(burn, 0.0, uDepthMax);
 
   // Carbon clears slower than the opening so the rim and ash crust outlast the
   // hole briefly — viewers get time to read the ice before paper knits over.
   charred = max(charred, burn * smoothstep(0.30, 0.62, burn));
-  charred -= uDt * uHealChar * cold * healJitter * (0.85 + 0.15 * charred) * uHealScale;
+  charred -= uDt * uHealChar * cold * healJitter * (0.85 + 0.15 * charred) * uHealScale * veil;
   charred = clamp(charred, burn, uDepthMax);
 
   // Loose ash in an open hole, or carbon left over after burn-through, fades when
@@ -319,6 +336,18 @@ uniform float uPixelScale;
 uniform float uTime;
 uniform float uEdgeChaos;
 uniform float uFlicker;
+// Recovery-phase presence, 0..1. While the sheet grows back the pointer is no
+// flame: it is a cold breath that parts the ash. Purely cosmetic — nothing here
+// is ever written to the state, so it cannot disturb the recovery.
+uniform float uInteract;
+uniform vec2 uPointerUv;
+// Phase-change transition at the cursor: 1 at the moment of the change,
+// decaying to 0. Kind is +1 when the flame gutters out into the cold presence,
+// -1 when the cold presence bursts back into flame. Cosmetic only.
+uniform float uPulse;
+uniform float uPulseKind;
+// Smoothed pointer velocity in aspect-corrected units per second.
+uniform vec2 uPointerVel;
 
 const float CONTOUR = 0.50;
 const float EMBER_WIDTH = 9.0;
@@ -348,7 +377,55 @@ void main() {
   float canvasAspect = uResolution.x / max(uResolution.y, 1.0);
   vec2 ap = vec2(uv.x * canvasAspect, uv.y);
 
-  vec4 state = sampleState(uv);
+  // The cold presence: a vortex of wind around the pointer, plus the wake the
+  // pointer leaves when it moves. It is a displacement field that everything
+  // in this pass is read through — the ash grain, the ice beneath, and the
+  // sheet itself with the shapes cut in it — so the whole cloud turns, sways
+  // and is shoved aside as one body rather than a lens laid over a still image.
+  // Only the reading is displaced; the state is never written, so the recovery
+  // underneath proceeds exactly as it would without the presence.
+  vec2 apP = vec2(uPointerUv.x * canvasAspect, uPointerUv.y);
+  vec2 toP = ap - apP;
+  float pd = length(toP);
+  float pang = atan(toP.y, toP.x);
+  vec2 radial = toP / max(pd, 1e-4);
+  vec2 tangent = vec2(-radial.y, radial.x);
+  float aura = (1.0 - smoothstep(0.02, 0.30, pd)) * uInteract;
+  // The eye of the vortex is calm; the wind peaks a little way out.
+  float eye = smoothstep(0.0, 0.09, pd);
+  float swirlPhase = uTime * 0.9 + pd * 22.0;
+  // Two spiral arms turning with time so the swirl is seen rotating, not just
+  // smeared. Gusts along the radius make it breathe.
+  float arms = sin(pang * 2.0 - uTime * 1.4 + pd * 18.0);
+  float gust = cos(uTime * 1.7 - pd * 14.0);
+  vec2 windFlow = tangent * (0.026 + 0.012 * sin(swirlPhase) + 0.010 * arms)
+                + radial * (0.011 * gust + 0.006 * arms);
+  // Fine turbulence that drifts through the field.
+  vec2 turb = (texture2D(uNoise, ap * 3.2 + vec2(uTime * 0.045, -uTime * 0.03)).rg - 0.5) * 0.022;
+  // Motion. The cloud lags behind a moving pointer and is shouldered aside
+  // ahead of it, like a bow wave. The velocity is smoothed on the CPU with some
+  // momentum, so the cloud goes on settling for a moment after the pointer
+  // stops — which is what makes it read as mass rather than as a filter.
+  float speed = length(uPointerVel);
+  vec2 velDir = uPointerVel / max(speed, 1e-4);
+  float push = smoothstep(0.0, 1.2, speed);
+  float wakeReach = (1.0 - smoothstep(0.0, 0.44, pd)) * uInteract;
+  vec2 motion = (
+      -velDir * 0.034
+    + radial * max(dot(radial, velDir), 0.0) * 0.026
+    + tangent * dot(tangent, velDir) * 0.012
+  ) * push * wakeReach;
+  vec2 wind = (windFlow + turb) * aura * eye + motion;
+
+  vec2 apSwirl = ap + wind;
+  vec2 uvWind = vec2(wind.x / canvasAspect, wind.y);
+  // The sheet — and every shape read off the state — rides the wind at a
+  // fraction of the full strength; the ice beneath rides it whole. The slight
+  // slide between the two is what gives the cloud depth.
+  vec2 uvSheet = uv + uvWind * 0.62;
+  vec2 apSheet = ap + wind * 0.62;
+
+  vec4 state = sampleState(uvSheet);
   float burn = state.r;
   float heat = state.g;
   float charState = state.b;
@@ -363,8 +440,8 @@ void main() {
   // heals would stretch the dressed bands across the whole opening. This is the
   // furthest a band is ever allowed to claim it is from the contour.
   float minSlope = CONTOUR / (110.0 * px);
-  float dx = sampleState(uv + vec2(texel.x, 0.0)).r - sampleState(uv - vec2(texel.x, 0.0)).r;
-  float dy = sampleState(uv + vec2(0.0, texel.y)).r - sampleState(uv - vec2(0.0, texel.y)).r;
+  float dx = sampleState(uvSheet + vec2(texel.x, 0.0)).r - sampleState(uvSheet - vec2(texel.x, 0.0)).r;
+  float dy = sampleState(uvSheet + vec2(0.0, texel.y)).r - sampleState(uvSheet - vec2(0.0, texel.y)).r;
   vec2 gradient = vec2(dx, dy) * 0.5 / pixelsPerTexel;
   // Floored, because the field flattens out as it heals and an unbounded
   // reciprocal would stretch the dressed bands across the whole opening.
@@ -376,8 +453,12 @@ void main() {
   // enough to carry a proper carbonised margin. The ring is rotated per pixel so
   // the sampling pattern never prints its own shape into the boundary.
   const float BASE = 4.0;
-  vec4 spin = texture2D(uNoise, ap * 41.0);
-  vec4 grit = texture2D(uNoise, ap * 7.50 - vec2(0.23, 0.61));
+  vec4 spin = texture2D(uNoise, apSheet * 41.0);
+  vec4 grit = texture2D(uNoise, apSwirl * 7.50 - vec2(0.23, 0.61));
+
+  // How much of the crust the breath has lifted at this pixel. Uneven on purpose
+  // so it reads as ash being blown off in patches, not a clean circle wiped out.
+  float sweep = aura * (0.50 + 0.50 * smoothstep(0.25, 0.80, grit.b + 0.25 * sin(swirlPhase * 0.5)));
   float rotation = spin.a * 6.2831853;
   vec2 wide = texel * BASE;
   float charSoft = charState * 0.20;
@@ -385,7 +466,7 @@ void main() {
   for (int i = 0; i < 8; i++) {
     float angle = rotation + float(i) * 0.7853982;
     vec2 dir = vec2(cos(angle), sin(angle));
-    float value = sampleState(uv + dir * wide).b;
+    float value = sampleState(uvSheet + dir * wide).b;
     charSoft += value * 0.10;
     moment += value * dir;
   }
@@ -402,7 +483,7 @@ void main() {
     float angle = wideRotation + float(i) * 1.0471976;
     // Plain bilinear: this gather is a blur already, so the eased sampling the
     // rim needs would only cost fetches here.
-    charWide += texture2D(uState, uv + vec2(cos(angle), sin(angle)) * texel * WIDE).b;
+    charWide += texture2D(uState, uvSheet + vec2(cos(angle), sin(angle)) * texel * WIDE).b;
   }
   charWide *= 0.1667;
 
@@ -414,11 +495,11 @@ void main() {
   // Each octave is fetched once and its four channels — which the bake filled
   // with unrelated patterns — are spread across the rim, the crust edge and the
   // crust width, so the three never trace one another.
-  vec2 warp = (texture2D(uNoise, ap * 0.9 + vec2(0.05, 0.37)).rg - 0.5) * 0.20;
-  vec4 o1 = texture2D(uNoise, (ap + warp) * 1.70 + vec2(0.13, 0.41));
-  vec4 o2 = texture2D(uNoise, (ap + warp) * 4.30 - vec2(0.27, 0.09));
-  vec4 o3 = texture2D(uNoise, (ap + warp) * 11.0 + vec2(0.63, 0.22));
-  vec4 o4 = texture2D(uNoise, (ap + warp) * 27.0 - vec2(0.41, 0.87));
+  vec2 warp = (texture2D(uNoise, apSheet * 0.9 + vec2(0.05, 0.37)).rg - 0.5) * 0.20;
+  vec4 o1 = texture2D(uNoise, (apSheet + warp) * 1.70 + vec2(0.13, 0.41));
+  vec4 o2 = texture2D(uNoise, (apSheet + warp) * 4.30 - vec2(0.27, 0.09));
+  vec4 o3 = texture2D(uNoise, (apSheet + warp) * 11.0 + vec2(0.63, 0.22));
+  vec4 o4 = texture2D(uNoise, (apSheet + warp) * 27.0 - vec2(0.41, 0.87));
   float chaos = (
       (o1.r - 0.5) * 17.0
     + (o2.g - 0.5) * 12.0
@@ -439,8 +520,10 @@ void main() {
   holeDist += chaos;
   charDist += chaos * 0.55 + charChaos;
 
-  vec3 fire = texture2D(uFire, coverUv(uv, canvasAspect, uFireSize)).rgb;
-  vec3 ice = texture2D(uIce, coverUv(uv, canvasAspect, uIceSize)).rgb;
+  // The sheet's image moves with the sheet's shapes; the scene beneath rides the
+  // full wind.
+  vec3 fire = texture2D(uFire, coverUv(uvSheet, canvasAspect, uFireSize)).rgb;
+  vec3 ice = texture2D(uIce, coverUv(uv + uvWind, canvasAspect, uIceSize)).rgb;
 
   // Sheet presence — one pixel of softening only, so the rim reads as torn.
   // Spent patches that have not fully knitted shut stay open: a half-healed
@@ -456,13 +539,13 @@ void main() {
   // from the wide gather so it reaches out into clean sheet.
   float haloGrain = 0.66 + 0.68 * o2.a;
   float halo = smoothstep(0.06, 0.95, charWide * haloGrain);
-  surface = mix(surface, surface * vec3(0.74, 0.55, 0.36), halo * 0.80);
+  surface = mix(surface, surface * vec3(0.74, 0.55, 0.36), halo * 0.80 * (1.0 - sweep * 0.50));
 
   // Heat browning, close in. This is the only layer a quick pass ever reaches,
   // so it has to register at low damage.
   float scorch = smoothstep(0.012, 0.20, charSoft);
   float scorchGrain = 0.72 + 0.56 * grit.r;
-  surface = mix(surface, surface * vec3(0.58, 0.34, 0.18), scorch * scorchGrain * 0.92);
+  surface = mix(surface, surface * vec3(0.58, 0.34, 0.18), scorch * scorchGrain * 0.92 * (1.0 - sweep * 0.60));
 
   // A second, deeper singe sits between that browning and the carbon. Distance
   // from the rim saturates a few pixels out, so this one is driven by the field
@@ -474,7 +557,7 @@ void main() {
   surface = mix(
     surface,
     surface * vec3(0.56, 0.38, 0.24) * singeMottle + vec3(0.011, 0.005, 0.002),
-    singe * 0.90
+    singe * 0.90 * (1.0 - sweep * 0.55)
   );
 
   // Carbonised crust. Its width swings on the scale of the band itself, so it
@@ -482,7 +565,7 @@ void main() {
   // than tracing the opening at an even thickness like an outline.
   float crustWidth = CHAR_WIDTH * (0.42 + 0.58 * o2.b + 0.52 * o3.r + 0.30 * o4.r);
 
-  float crack = texture2D(uNoise, ap * 21.0 + vec2(0.53, 0.17)).r;
+  float crack = texture2D(uNoise, apSwirl * 21.0 + vec2(0.53, 0.17)).r;
   float flake = grit.g;
   float soot = spin.r;
 
@@ -499,11 +582,13 @@ void main() {
   float rimActive = smoothstep(0.14, 0.40, burn) * (1.0 - smoothstep(0.54, 0.82, burn));
   float emberLife = max(alive * activity, rimActive * (0.42 + 0.58 * activity));
   float carbonGate = carbonised * (1.0 - rimActive * (1.0 - max(alive, activity * 0.85)) * 0.92);
+  // The breath lifts the crust and its shoulder off the sheet underneath.
+  carbonGate *= 1.0 - sweep * 0.90;
 
   // Blistered shoulder right against the crust, where the sheet has gone dark
   float shoulder = smoothstep(-crustWidth * 1.90 * px, -crustWidth * 0.75 * px, charDist);
   surface = mix(surface, surface * (0.30 + 0.55 * flake) + vec3(0.010, 0.005, 0.002),
-    shoulder * mix(0.45, 0.85, carbonGate));
+    shoulder * mix(0.45, 0.85, carbonGate) * (1.0 - sweep * 0.70));
 
   vec3 ash = mix(vec3(0.018, 0.013, 0.012), vec3(0.205, 0.172, 0.155), pow(crack * flake, 0.95));
   ash = mix(ash, vec3(0.35, 0.33, 0.315), smoothstep(0.50, 0.92, soot * flake * 1.55) * 0.65);
@@ -542,6 +627,58 @@ void main() {
   below += vec3(0.88, 0.30, 0.06) * lip * lip * emberLife * 0.48 * flicker;
 
   vec3 color = mix(below, surface, sheet);
+
+  // The breath itself: a cold, frosted bloom that brightens where ash lifted
+  // and thins the ash veil so the ice underneath glints through — a presence
+  // that reads as the opposite of a flame. Rides over everything; writes nothing.
+  float breath = aura * (0.35 + 0.65 * smoothstep(0.30, 0.85, grit.g + 0.20 * sin(uTime * 1.3 + pd * 31.0)));
+  vec3 frost = vec3(0.62, 0.80, 0.98);
+  vec3 hot = vec3(1.0, 0.46, 0.10);
+  // Parts the dark veil so the ice underneath glints through.
+  color = mix(color, ice, sweep * 0.72 * smoothstep(0.02, 0.30, charSoft));
+  // A cold cast over everything in the draught, and a frosted bloom. These are
+  // what make the presence read on bare ice, where there is no ash to part.
+  color = mix(color, color * vec3(0.84, 0.95, 1.14), aura * 0.55);
+  color += frost * breath * 0.34 * (0.6 + 0.4 * flicker);
+  // Ice crystals carried on the wind: bright specks that drift with the swirl.
+  float crystals = smoothstep(0.86, 0.98, texture2D(uNoise, apSwirl * 34.0 + vec2(0.31, 0.77)).b);
+  color += frost * crystals * aura * eye * 0.55;
+
+  // Phase change, at cursor scale.
+  float prog = 1.0 - uPulse;
+  float toCold = step(0.0, uPulseKind);
+  vec3 transition = vec3(0.0);
+  if (uPulse > 0.0) {
+    // Quench: the flame gutters. It shrinks, reddens to a dull coal, then the
+    // cold takes it and it goes blue-white, with a puff of vapour lifting off.
+    float coreR2 = 0.0009 * mix(1.0, 0.30, prog);
+    float core = exp(-pd * pd / coreR2);
+    vec3 gutter = mix(hot, vec3(0.55, 0.06, 0.02), smoothstep(0.10, 0.50, prog));
+    gutter = mix(gutter, frost, smoothstep(0.50, 0.92, prog));
+    float sputter = 0.70 + 0.30 * sin(uTime * 38.0 + pd * 90.0);
+    vec3 quench = gutter * core * (1.0 - 0.55 * prog) * sputter * 1.7;
+    vec2 puffP = toP - vec2(0.0, prog * 0.055);
+    float puffR = 0.018 + 0.070 * prog;
+    float puffN = texture2D(uNoise, (ap + vec2(0.0, -uTime * 0.06)) * 13.0).g;
+    float puff = exp(-dot(puffP, puffP) / (puffR * puffR))
+      * smoothstep(0.30, 0.78, puffN + 0.25 * prog)
+      * (1.0 - prog) * smoothstep(0.0, 0.25, prog);
+    quench += frost * puff * 0.85;
+
+    // Reignite: a burst. A hard flash at the eye, then sparks flung outward
+    // that go out as they travel.
+    float flash = exp(-pd * pd / 0.0022) * pow(1.0 - prog, 3.0);
+    float sparkR = 0.012 + 0.125 * prog;
+    float sparkRing = exp(-pow((pd - sparkR) / 0.016, 2.0));
+    float sparkN = texture2D(uNoise, apSwirl * 23.0 + vec2(0.71, 0.19)).a;
+    float sparks = sparkRing * smoothstep(0.52, 0.80, sparkN) * (1.0 - prog) * (1.0 - prog);
+    float glowR2 = 0.006;
+    float glow = exp(-pd * pd / glowR2) * (1.0 - prog) * 0.5;
+    vec3 burst = hot * (flash * 2.4 + glow) + vec3(1.0, 0.78, 0.40) * sparks * 1.5;
+
+    transition = mix(burst, quench, toCold) * uPulse;
+  }
+  color += transition;
   gl_FragColor = vec4(color, 1.0);
 }
 `;

@@ -1,4 +1,4 @@
-import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js";
+import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js?v=33";
 
 // Every rate is per second so behaviour is frame-rate independent.
 export const BURN_SETTINGS = {
@@ -29,7 +29,7 @@ export const BURN_SETTINGS = {
   recoverySeconds: 180,
   // After the heat source goes away, hold this long before any healing starts so
   // the audience can read the burn before ashes knit back or the hole closes.
-  recoveryHoldSeconds: 12,
+  recoveryHoldSeconds: 3,
   // Char fades slower than the opening (ratio < 1) so the carbon rim outlasts
   // the hole briefly and ashes do not rush in while the ice is still visible.
   charHealRatio: 0.82,
@@ -39,6 +39,33 @@ export const BURN_SETTINGS = {
   // Mid-recovery plateau: burn has sunk but char still blankets the sheet.
   // Extra fade here shortens the all-ash phase without touching the hold or tail.
   ashMidFade: 0.16,
+  // Once the sheet has closed over a spot, the dark ash veil left on top clears
+  // this much faster than the base heal rate (5.0 = six times as fast). Only
+  // the all-ash "cloud" phase is affected: neither how the opening knits shut
+  // nor how the paper finally grows back changes.
+  veilHeal: 5.0,
+  // Cursor-scale transitions: the flame guttering out into the cold presence,
+  // and the cold presence bursting back into flame.
+  quenchSeconds: 1.4,
+  reigniteSeconds: 0.9,
+  // The cold presence hands back to the flame once the sheet is this far
+  // recovered (probe-wide max and mean of remaining damage), rather than
+  // waiting for the last trace of scorch to fade.
+  reigniteMax: 0.07,
+  reigniteMean: 0.03,
+
+  // Once the first fire has taken most of the sheet, the source stops being a
+  // flame and becomes a cold presence that parts the ash without touching the
+  // state — so a cursor left on the page cannot re-burn what is growing back.
+  // Fraction of the sheet that must be open, with no front still running, to
+  // enter that phase. Past `recoverCoverageDone` the fire counts as finished
+  // even if a few embers are still reading on the probes.
+  recoverCoverage: 0.55,
+  recoverCoverageDone: 0.93,
+  // Heat above this counts as "still burning": under the pointer it pauses the
+  // recovery hold (a pointer parked over an open hole no longer does), and
+  // anywhere on the sheet it keeps the first fire in its flame phase.
+  burningHeat: 0.03,
 
   // Appearance
   edgeChaos: 1.0,
@@ -52,7 +79,7 @@ export const BURN_SETTINGS = {
 
 const DEFAULT_FIRE = new URL("../../Assets/background/Fire.jpg", import.meta.url).href;
 const DEFAULT_ICE = new URL("../../Assets/background/Ice.png", import.meta.url).href;
-const STYLE_HREF = new URL("./burn.css", import.meta.url).href;
+const STYLE_HREF = new URL("./burn.css?v=33", import.meta.url).href;
 
 const QUAD = new Float32Array([-1, -1, 3, -1, -1, 3]);
 
@@ -444,6 +471,16 @@ export function initBurn(options = {}) {
   let sawDamage = false;
   let sampleAccum = 0;
   let recoveryHoldRemaining = 0;
+  // "burning"    — first pass, the pointer is a flame and the fire spreads.
+  // "recovering" — the sheet is mostly gone; the pointer is a cold presence
+  //                that parts the ash but writes nothing to the state.
+  // "pinpoint"   — fully healed once; the pointer burns only where it is.
+  let phase = "burning";
+  // Smoothed 0..1 weight for the recovery-phase presence in the composite.
+  let interact = 0;
+  // Whether the pointer is actually consuming sheet right now, read off the
+  // heat under it. Pointer presence alone no longer pauses recovery.
+  let pointerBurning = false;
   const probeW = 8;
   const probeH = 8;
   const sampleBuf =
@@ -451,32 +488,103 @@ export function initBurn(options = {}) {
       ? new Uint8Array(probeW * probeH * 4)
       : new Float32Array(probeW * probeH * 4);
 
+  // Phase-change transition at the cursor: 1 at the change, decays to 0. Kind
+  // +1 = flame quenched into the cold presence, -1 = cold presence reignites.
+  let pulse = 0;
+  let pulseKind = 0;
+  // The first fire has taken the sheet; the hold is running and the cold
+  // presence follows once healing actually starts.
+  let sheetTaken = false;
+  // Smoothed pointer velocity (uv per second) — rises quickly, decays slowly,
+  // so the cloud keeps moving for a moment after the pointer stops.
+  let velX = 0;
+  let velY = 0;
+
+  function setPhase(next) {
+    const prev = phase;
+    phase = next;
+    canvas.classList.toggle("is-recovering", next === "recovering");
+    document.documentElement.dataset.burnPhase = next;
+    if (prev !== next) {
+      if (next === "recovering") {
+        // Cold takes the pointer completely: flame canvas is hidden via CSS on
+        // data-burn-phase, and the presence is fully on from this frame.
+        pulse = 1;
+        pulseKind = 1;
+        interact = pointer.active > 0.03 ? 1 : 0;
+      } else if (prev === "recovering") {
+        // Reignite: cold is gone immediately, burst plays, flame canvas returns.
+        // The first-fire latch is done — later burns must be able to write heat.
+        pulse = 1;
+        pulseKind = -1;
+        interact = 0;
+        sheetTaken = false;
+      }
+    }
+  }
+  setPhase(phase);
+
+  function readProbe(ox, oy) {
+    gl.readPixels(ox, oy, probeW, probeH, gl.RGBA, stateFormat.type, sampleBuf);
+    return gl.getError() === gl.NO_ERROR;
+  }
+
   function sampleSheetDamage() {
-    if (!stateA) return { burn: 0, charred: 0 };
+    if (!stateA) return null;
     gl.bindFramebuffer(gl.FRAMEBUFFER, stateA.framebuffer);
     let burn = 0;
     let charred = 0;
+    let open = 0;
+    let total = 0;
+    let heatMax = 0;
+    let damageSum = 0;
     const scale = stateFormat.precision === "byte" ? 1 / 255 : 1;
-    const origins = [
-      [0, 0],
-      [Math.max(0, simWidth - probeW), 0],
-      [0, Math.max(0, simHeight - probeH)],
-      [Math.max(0, Math.floor(simWidth / 2 - probeW / 2)), Math.max(0, Math.floor(simHeight / 2 - probeH / 2))],
-      [Math.max(0, simWidth - probeW), Math.max(0, simHeight - probeH)],
-    ];
-    for (const [ox, oy] of origins) {
-      gl.readPixels(ox, oy, probeW, probeH, gl.RGBA, stateFormat.type, sampleBuf);
-      if (gl.getError() !== gl.NO_ERROR) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        return null;
-      }
-      for (let i = 0; i < probeW * probeH; i++) {
-        burn = Math.max(burn, sampleBuf[i * 4] * scale);
-        charred = Math.max(charred, sampleBuf[i * 4 + 2] * scale);
+    // A 9x9 grid of small probes, corners and edges included, so coverage is a
+    // real estimate of the sheet rather than a vote between a few spots, and a
+    // running front — a thin band — has little room to slip between them.
+    const cols = 9;
+    const rows = 9;
+    for (let r = 0; r < rows; r++) {
+      const oy = Math.round((simHeight - probeH) * r / (rows - 1));
+      for (let c = 0; c < cols; c++) {
+        const ox = Math.round((simWidth - probeW) * c / (cols - 1));
+        if (!readProbe(ox, oy)) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          return null;
+        }
+        for (let i = 0; i < probeW * probeH; i++) {
+          const b = sampleBuf[i * 4] * scale;
+          const c = sampleBuf[i * 4 + 2] * scale;
+          burn = Math.max(burn, b);
+          heatMax = Math.max(heatMax, sampleBuf[i * 4 + 1] * scale);
+          charred = Math.max(charred, c);
+          damageSum += Math.max(b, c);
+          if (b > 0.5) open++;
+          total++;
+        }
       }
     }
+
+    // Heat directly under the pointer — the only honest signal for "the source
+    // is still eating sheet". Parked over an opening it reads cold.
+    let heatAtPointer = 0;
+    const px = clamp(Math.round(pointer.x * simWidth - probeW / 2), 0, Math.max(0, simWidth - probeW));
+    const py = clamp(Math.round(pointer.y * simHeight - probeH / 2), 0, Math.max(0, simHeight - probeH));
+    if (readProbe(px, py)) {
+      for (let i = 0; i < probeW * probeH; i++) {
+        heatAtPointer = Math.max(heatAtPointer, sampleBuf[i * 4 + 1] * scale);
+      }
+    }
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    return { burn, charred };
+    return {
+      burn,
+      charred,
+      heatMax,
+      coverage: open / Math.max(total, 1),
+      damageMean: damageSum / Math.max(total, 1),
+      heatAtPointer,
+    };
   }
 
   function simulate(deltaSeconds) {
@@ -495,7 +603,16 @@ export function initBurn(options = {}) {
     gl.uniform1f(simProgram.location("uAspect"), simWidth / simHeight);
     gl.uniform2f(simProgram.location("uPointerPrev"), pointer.previousX, pointer.previousY);
     gl.uniform2f(simProgram.location("uPointer"), pointer.x, pointer.y);
-    gl.uniform1f(simProgram.location("uPointerActive"), pointer.active);
+    // In the recovery phase the pointer is not a heat source at all.
+    gl.uniform1f(
+      simProgram.location("uPointerActive"),
+      // Mute the source only while the first fire's hold is running, and for the
+      // whole cold-presence recovery. Once we hand back to pinpoint (or any
+      // later burn), sheetTaken must not keep the pointer dead forever.
+      phase === "recovering" || (sheetTaken && phase === "burning")
+        ? 0
+        : pointer.active,
+    );
     gl.uniform1f(simProgram.location("uDt"), deltaSeconds);
     gl.uniform1f(simProgram.location("uRadius"), settings.radius);
     gl.uniform1f(simProgram.location("uInject"), settings.inject);
@@ -518,6 +635,7 @@ export function initBurn(options = {}) {
     );
     gl.uniform1f(simProgram.location("uAshFade"), settings.ashFade);
     gl.uniform1f(simProgram.location("uAshMidFade"), settings.ashMidFade);
+    gl.uniform1f(simProgram.location("uVeilHeal"), settings.veilHeal);
     gl.uniform1f(simProgram.location("uHealScale"), recoveryHoldRemaining > 0 ? 0 : 1);
     gl.uniform1f(simProgram.location("uSpreadMode"), spreadMode);
 
@@ -557,6 +675,16 @@ export function initBurn(options = {}) {
       compositeProgram.location("uFlicker"),
       reducedMotion.matches ? 0 : settings.flicker,
     );
+    gl.uniform1f(compositeProgram.location("uInteract"), interact);
+    gl.uniform2f(compositeProgram.location("uPointerUv"), pointer.x, pointer.y);
+    // No ring if the pointer is not on the page: it would fire at a stale spot.
+    gl.uniform1f(compositeProgram.location("uPulse"), pulse * pointer.active);
+    gl.uniform1f(compositeProgram.location("uPulseKind"), pulseKind);
+    gl.uniform2f(
+      compositeProgram.location("uPointerVel"),
+      velX * (viewWidth / Math.max(viewHeight, 1)),
+      velY,
+    );
 
     drawQuad();
   }
@@ -576,10 +704,47 @@ export function initBurn(options = {}) {
       * clamp(deltaSeconds * ramp, 0, 1);
     if (pointer.active < 0.001) pointer.active = 0;
 
-    if (pointer.active > 0.03) {
+    // Before the sheet is taken, a still-burning pointer keeps pushing the hold
+    // back so the audience can finish the fire. Once the sheet is taken the hold
+    // must run out even if the cursor stays on the page — otherwise a resting
+    // mouse freezes recovery forever via residual heat under the tip.
+    if (pointerBurning && !sheetTaken && phase !== "recovering") {
       recoveryHoldRemaining = settings.recoveryHoldSeconds;
     } else if (recoveryHoldRemaining > 0) {
       recoveryHoldRemaining = Math.max(0, recoveryHoldRemaining - deltaSeconds);
+    }
+
+    // Healing has started: the flame gives way to the cold presence.
+    if (sheetTaken && phase === "burning" && recoveryHoldRemaining <= 0) {
+      setPhase("recovering");
+    }
+
+    // Outside recovering the presence is hard-off (setPhase already cleared it).
+    // Inside, follow the pointer — no soft lag that would leave cold on a flame
+    // or flame on cold.
+    if (phase === "recovering") {
+      const interactTarget = pointer.active > 0.03 ? 1 : 0;
+      interact += (interactTarget - interact) * clamp(deltaSeconds * 8, 0, 1);
+      if (interact < 0.001) interact = 0;
+    } else {
+      interact = 0;
+    }
+    if (pulse > 0) {
+      const seconds = pulseKind > 0 ? settings.quenchSeconds : settings.reigniteSeconds;
+      pulse = Math.max(0, pulse - deltaSeconds / Math.max(0.2, seconds));
+    }
+
+    // Pointer velocity with momentum, for the wind field.
+    const instVx = (pointer.x - pointer.previousX) / deltaSeconds;
+    const instVy = (pointer.y - pointer.previousY) / deltaSeconds;
+    const rising = Math.hypot(instVx, instVy) > Math.hypot(velX, velY);
+    const velK = clamp(deltaSeconds * (rising ? 12 : 2.6), 0, 1);
+    velX += (instVx - velX) * velK;
+    velY += (instVy - velY) * velK;
+    const velMag = Math.hypot(velX, velY);
+    if (velMag > 3) {
+      velX *= 3 / velMag;
+      velY *= 3 / velMag;
     }
 
     simulate(deltaSeconds);
@@ -587,15 +752,47 @@ export function initBurn(options = {}) {
     pointer.previousX = pointer.x;
     pointer.previousY = pointer.y;
 
-    // After the first burn episode fully heals, lock into mouse-only mode.
     sampleAccum += deltaSeconds;
-    if (spreadMode > 0 && sampleAccum >= 0.45) {
+    if (sampleAccum >= 0.45) {
       sampleAccum = 0;
       const sample = sampleSheetDamage();
       if (sample) {
+        pointerBurning =
+          !sheetTaken
+          && pointer.active > 0.03
+          && sample.heatAtPointer > settings.burningHeat;
+
         if (sample.burn > 0.12 || sample.charred > 0.12) sawDamage = true;
-        else if (sawDamage && sample.burn < 0.035 && sample.charred < 0.035) {
+
+        // Sheet-wide heat only — heat under the resting cursor must not block
+        // "the fire is finished", or recovery waits until the mouse leaves.
+        const fireOut = sample.heatMax < settings.burningHeat;
+        if (
+          phase === "burning"
+          && spreadMode > 0
+          && !sheetTaken
+          && (
+            sample.coverage >= settings.recoverCoverageDone
+            || (sample.coverage >= settings.recoverCoverage && fireOut)
+          )
+        ) {
+          // The first fire has taken the sheet. Start the hold; the pointer
+          // stays a flame until it runs out and healing begins, then the cold
+          // presence takes over (see the frame loop).
+          sheetTaken = true;
+          pointerBurning = false;
+          recoveryHoldRemaining = settings.recoveryHoldSeconds;
+        } else if (
+          phase !== "pinpoint"
+          && sawDamage
+          && Math.max(sample.burn, sample.charred) < settings.reigniteMax
+          && sample.damageMean < settings.reigniteMean
+        ) {
+          // Recovered as good as fully: from now on the pointer burns only
+          // where it is. The last traces of scorch fade on their own.
           spreadMode = 0;
+          sheetTaken = false;
+          setPhase("pinpoint");
         }
       }
     }
@@ -622,6 +819,13 @@ export function initBurn(options = {}) {
       sawDamage = false;
       sampleAccum = 0;
       recoveryHoldRemaining = 0;
+      pointerBurning = false;
+      interact = 0;
+      setPhase("burning");
+      pulse = 0;
+      sheetTaken = false;
+      velX = 0;
+      velY = 0;
     },
     pause() {
       running = false;
