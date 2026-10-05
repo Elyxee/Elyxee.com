@@ -5,7 +5,7 @@
   --ink: #f0ebe3;
   /* Matches the burn shader's cover crop so the CSS underlay and WebGL
      first frame read as one surface. */
-  --fire: url("Assets/background/Fire.jpg");
+  --fire: url("Assets/background/Fire-clean.png");
 }
 
 * {
@@ -29,4 +29,313 @@ body {
   background-position: center;
   background-repeat: no-repeat;
   color: var(--ink);
+}
+
+/* Burn section content from the Figma artboard. The copy is a material layer:
+   burn.js feeds the local state field into these variables so fire and ice can
+   tint, shake, frost and char the information without stealing pointer input. */
+.burn-content {
+  --burn-mark-heat: 0;
+  --burn-mark-burn: 0;
+  --burn-social-heat: 0;
+  --burn-social-burn: 0;
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  color: #f8f4ef;
+  isolation: isolate;
+}
+
+/* A quiet carved inscription. The small material canvas follows this live
+   layout; these real text nodes remain the accessible/no-WebGL fallback. */
+.burn-mark {
+  position: absolute;
+  top: clamp(2.2rem, 6.3vh, 4.25rem);
+  left: clamp(1.15rem, 3.75vw, 4.5rem);
+  z-index: 1;
+  width: max-content;
+  color: #d3caba;
+  text-shadow: 0 1px 1px rgba(26, 13, 8, 0.65);
+}
+
+.burn-mark__name,
+.burn-mark__copyright {
+  font-family: Narri, Georgia, serif;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.burn-mark__name {
+  font-size: clamp(3.25rem, 5.2083vw, 6.25rem);
+  line-height: 0.9;
+  letter-spacing: 0;
+  /* Narri's y descends below its compact line box. Reserve ink clearance at
+     the title's scale, rather than relying on the much smaller copy's margin. */
+  padding-bottom: 0.20em;
+}
+
+.burn-mark__copyright {
+  margin-top: 0.36em;
+  font-size: clamp(0.6875rem, 0.9375vw, 1.125rem);
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.burn-mark__motto {
+  width: max-content;
+  margin: 0.65em 0 0;
+  font-family: Gabriela, Georgia, "Times New Roman", serif;
+  font-size: clamp(0.75rem, 1.09375vw, 1.3125rem);
+  font-weight: 400;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.burn-mark__motto > span {
+  display: block;
+  white-space: nowrap;
+}
+
+.burn-mark__hebrew {
+  text-align: right;
+  direction: rtl;
+  unicode-bidi: isolate;
+  /* Gabriela has no Hebrew glyphs; keep the pointed Hebrew in a serif face. */
+  font-family: "Times New Roman", serif;
+  line-height: 1.3;
+}
+
+.burn-mark__material {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+}
+
+.burn-mark[data-material-ready] [data-inscription-line] {
+  color: transparent;
+  text-shadow: none;
+}
+
+.burn-socials {
+  position: fixed;
+  right: clamp(1.25rem, 4vw, 4.8rem);
+  bottom: clamp(1.2rem, 3.3vh, 2.8rem);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: clamp(0rem, 0.35vw, 0.4rem);
+  --social-accent: #d5b17b;
+  --social-rgb: 213, 177, 123;
+}
+
+.burn-social {
+  display: block;
+  width: clamp(1.5rem, 2.05vw, 2.1rem);
+  height: clamp(1.5rem, 2.05vw, 2.1rem);
+  object-fit: contain;
+  /* The image fallback is also quiet; WebGL uses the same ivory, wood and
+     water material as the title while preserving each source's engraving. */
+  filter: grayscale(1) sepia(0.35) brightness(0.85);
+}
+
+.burn-socials[data-material-ready] .burn-social { opacity: 0; }
+
+@font-face {
+  font-family: Narri;
+  src: url("Assets/Font/narri-regular.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: Gabriela;
+  src: url("Assets/Font/Gabriela-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-weight: 400;
+  font-style: normal;
+}
+
+@media (max-width: 600px) {
+  .burn-mark { top: 2.2rem; left: 1.15rem; }
+  .burn-socials { right: 1rem; bottom: 1rem; }
+}
+
+/* Interactive engravings: the icon material and its burn stay as they are.
+   Intent is the mark itself — it swells on hover, presses into the material
+   and blooms on release — never a UI frame. Motion is posed in socials.js. */
+.social-control {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--social-accent);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  outline: none;
+}
+.social-control .burn-social { pointer-events: none; }
+
+/* Release: a soft ember bloom with a few sparks lifting off the mark. */
+.social-burst {
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(255, 220, 160, .55),
+    rgba(var(--social-ember), .30) 34%,
+    rgba(var(--social-ember), .08) 55%,
+    transparent 70%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: social-bloom .7s ease-out both;
+}
+/* The WeChat copy seal lands harder: a wider flash and a second spark lift. */
+.social-burst--strong {
+  inset: -20px;
+  background: radial-gradient(circle,
+    rgba(255, 236, 190, .80),
+    rgba(var(--social-ember), .45) 30%,
+    rgba(var(--social-ember), .14) 52%,
+    transparent 70%);
+  animation-duration: .9s;
+}
+.social-burst--strong::before {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  box-shadow: 0 0 12px 3px rgba(var(--social-ember), .5), inset 0 0 10px 2px rgba(255, 220, 170, .35);
+  animation: social-shock .6s cubic-bezier(.15, .7, .25, 1) both;
+}
+@keyframes social-shock {
+  0% { transform: scale(.4); opacity: .95; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.social-burst--strong::after {
+  box-shadow:
+    -9px -4px 0 0 rgba(255, 196, 120, .9),
+    7px -9px 0 0 rgba(255, 214, 150, .85),
+    12px 1px 0 -.5px rgba(var(--social-ember), .8),
+    -4px -13px 0 -.5px rgba(255, 230, 190, .8),
+    -13px 3px 0 -.5px rgba(var(--social-ember), .7),
+    15px -7px 0 0 rgba(255, 210, 150, .85),
+    -16px -10px 0 -.5px rgba(255, 196, 120, .8),
+    3px -18px 0 0 rgba(255, 236, 200, .9),
+    -2px 9px 0 -.5px rgba(var(--social-ember), .7);
+  animation-duration: 1s;
+}
+.social-burst::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(255, 222, 170, .95);
+  box-shadow:
+    -9px -4px 0 0 rgba(255, 196, 120, .9),
+    7px -9px 0 0 rgba(255, 214, 150, .85),
+    12px 1px 0 -.5px rgba(var(--social-ember), .8),
+    -4px -13px 0 -.5px rgba(255, 230, 190, .8),
+    -13px 3px 0 -.5px rgba(var(--social-ember), .7);
+  animation: social-sparks .85s cubic-bezier(.2, .6, .3, 1) both;
+}
+@keyframes social-bloom {
+  0% { transform: scale(.55); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes social-sparks {
+  0% { transform: translate(-50%, -50%) scale(.6); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translate(-50%, calc(-50% - 16px)) scale(1.1); opacity: 0; }
+}
+
+.social-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.burn-socials { --social-ember: 255, 146, 64; }
+html[data-burn-phase="recovering"] .burn-socials {
+  --social-accent: #acced1;
+  --social-rgb: 172, 206, 209;
+  --social-ember: 150, 205, 225;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .social-burst, .social-burst::before, .social-burst::after { animation: none; opacity: 0; }
+}
+@media (forced-colors: active) {
+  .social-control { color: LinkText; }
+  .social-control:focus-visible { outline: 1px solid LinkText; outline-offset: 4px; }
+}
+
+
+/* Burn-only navigation: another inscription on the same painted surface. */
+.burn-nav {
+  position: fixed;
+  top: clamp(2.2rem, 6.3vh, 4.25rem);
+  right: clamp(1.25rem, 4vw, 4.8rem);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font: 400 clamp(.8125rem, 1.09375vw, 1.3125rem)/1.4 Gabriela, Georgia, serif;
+  text-align: right;
+  color: #d3caba;
+}
+.burn-nav a {
+  display: block;
+  padding: .32em 0;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgba(26, 13, 8, .65);
+}
+.burn-nav .burn-nav__home {
+  margin-bottom: .55em;
+  font-size: 1em;
+  letter-spacing: .06em;
+  color: #dbb16f;
+  --inscription-tint: #ffd08a;
+}
+.burn-nav [data-inscription-line] { display: block; }
+.burn-nav[data-material-ready] [data-inscription-line] { color: transparent; text-shadow: none; }
+.burn-nav a:focus-visible { outline: 1px solid #b9a27d; outline-offset: 5px; }
+.burn-nav a { position: relative; }
+.burn-nav a::before {
+  content: "✦" / "";
+  position: absolute;
+  right: calc(100% + .65em);
+  top: .55em;
+  font-size: .65em;
+  color: #dbb16f;
+  opacity: 0;
+  transform: scale(.45);
+  transition: opacity .25s, transform .3s;
+  pointer-events: none;
+}
+.burn-nav a:is(:hover, :focus-visible)::before { opacity: .85; transform: scale(1); }
+.burn-nav a:active::before { transform: scale(.7); }
+html[data-burn-phase="recovering"] .burn-nav a::before { color: #b4d2d4; }
+@media (prefers-reduced-motion: reduce) { .burn-nav a::before { transition: none; } }
+@media (max-width: 600px) {
+  .burn-nav { top: 2.2rem; right: 1rem; font-size: .75rem; }
 }

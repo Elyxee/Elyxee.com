@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Burn opening pixel regression</title>
+<style>body{background:#121212;color:#eee;font:14px monospace}canvas{width:640px;max-width:100%}pre{white-space:pre-wrap}</style>
+<canvas id="render" width="640" height="360"></canvas>
+<pre id="results" role="status">Checking the actual composite shader…</pre>
+<script type="module">
+import { QUAD_VS, NOISE_BAKE_FS, COMPOSITE_FS } from '../components/burn/shaders.js?v=74';
+import { RECOVERY_COMPOSITE_FS, RECOVERY_SETTLE_FS } from '../components/burn/recovery-visual.js?v=74';
+import { TYPE_VERTEX, TYPE_FRAGMENT } from '../components/burn/type/material.js?v=74';
+const canvas = document.querySelector('canvas');
+const output = document.querySelector('pre');
+const gl = canvas.getContext('webgl', { alpha: false, preserveDrawingBuffer: true });
+const results = [];
+function program(fragment, vertex = QUAD_VS, attribute = 'aPos') {
+  const p = gl.createProgram();
+  for (const [type, source] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source); gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
+    gl.attachShader(p, shader);
+  }
+  gl.bindAttribLocation(p, 0, attribute); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+function texture(width, height, bytes) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  return t;
+}
+try {
+  if (!gl) throw new Error('WebGL unavailable');
+  const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  const noise = texture(512,512,null);
+  const framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, noise, 0);
+  gl.viewport(0,0,512,512); gl.useProgram(program(NOISE_BAKE_FS));
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  const recoveryComposite = program(RECOVERY_COMPOSITE_FS);
+  results.push('PASS c90860d recovery shader compiles and links');
+  let composite = program(COMPOSITE_FS);
+  gl.useProgram(composite);
+  const set1 = (name, value) => gl.uniform1f(gl.getUniformLocation(composite,name),value);
+  const set2 = (name, x, y) => gl.uniform2f(gl.getUniformLocation(composite,name),x,y);
+  const iceColor = [45, 90, 135, 255], fireColor = [210, 95, 30, 255];
+  const state = texture(1,1,new Uint8Array([0,0,0,0]));
+  const fire = texture(1,1,new Uint8Array(fireColor));
+  const ice = texture(1,1,new Uint8Array(iceColor));
+  [state,noise,fire,ice].forEach((t,i)=>{
+    gl.activeTexture(gl.TEXTURE0+i); gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.uniform1i(gl.getUniformLocation(composite,['uState','uNoise','uFire','uIce'][i]),i);
+  });
+  set2('uFireSize',1,1); set2('uIceSize',1,1); set2('uPointerUv',0.5,0.5);
+  set2('uPointerVel',0,0);
+  set1('uInteract',0); set1('uPulse',0); set1('uPulseKind',0);
+  set1('uEdgeChaos',0.86); set1('uFlicker',1);
+  for (const [width,height,dpr] of [[640,360,1],[390,740,1],[1280,720,2]]) {
+    canvas.width=width; canvas.height=height; gl.viewport(0,0,width,height);
+    set2('uResolution',width,height); set2('uSimSize',512,Math.round(512*height/width));
+    set1('uPixelScale',dpr);
+    for (const [name,burn,charred,spent,expected] of [
+      ['untouched',0,0,0,fireColor],
+      ['just consumed (last fragments)',0.56,0.56,0.30,iceColor],
+      ['freshly opened',0.58,0.58,0.39,iceColor],
+      ['spent plateau',0.62,0.66,0.80,iceColor],
+      ['fully open',0.68,0.68,1,iceColor],
+    ]) {
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,state);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,
+        new Uint8Array([Math.round(burn*255),0,Math.round(charred*255),Math.round(spent*255)]));
+      set1('uTime',11.3); gl.drawArrays(gl.TRIANGLES,0,3);
+      const pixels = new Uint8Array(width*height*4);
+      gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+      let contaminated=0,maxError=0;
+      for(let i=0;i<pixels.length;i+=4){
+        const error=Math.max(...expected.slice(0,3).map((c,k)=>Math.abs(pixels[i+k]-c)));
+        maxError=Math.max(maxError,error); if(error>2) contaminated++;
+      }
+      results.push(`${contaminated ? 'FAIL' : 'PASS'} ${width}×${height} @${dpr} ${name}: ${contaminated} contaminated pixels, maximum channel error ${maxError}`);
+    }
+  }
+  // A previously burned flag must never punch new holes in regrown paper.
+  canvas.width=640; canvas.height=360; gl.viewport(0,0,640,360);
+  set2('uResolution',640,360); set2('uSimSize',512,288); set1('uPixelScale',1);
+  function renderState(width,height,data) {
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,state);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,width,height,0,gl.RGBA,gl.UNSIGNED_BYTE,data);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    const pixels=new Uint8Array(640*360*4);
+    gl.readPixels(0,0,640,360,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    return pixels;
+  }
+  for(const damage of [0.04,0.14,0.30,0.42,0.49]) {
+    const b=Math.round(damage*255), c=Math.round(Math.min(1,damage+0.07)*255);
+    const fresh=renderState(1,1,new Uint8Array([b,0,c,0]));
+    const healed=renderState(1,1,new Uint8Array([b,0,c,255]));
+    let holes=0;
+    for(let i=0;i<healed.length;i+=4) if(healed[i+2]>healed[i]+20)holes++;
+    const identical=fresh.every((v,i)=>v===healed[i]);
+    results.push(`${identical&&holes===0?'PASS':'FAIL'} Regrown damage ${damage}: spent history has no visual holes (${holes})`);
+  }
+  const rimState=new Uint8Array(512*288*4);
+  for(let y=0;y<288;y++)for(let x=0;x<512;x++) {
+    const d=Math.hypot((x-256)/288,(y-144)/288);
+    const burn=Math.max(0,Math.min(0.66,0.5+(0.27-d)*4));
+    const i=(y*512+x)*4;
+    rimState[i]=Math.round(burn*255); rimState[i+1]=Math.round(0.06*255);
+    rimState[i+2]=Math.round(burn*255); rimState[i+3]=255;
+  }
+  const secondRim=renderState(512,288,rimState);
+  let brightRim=0;
+  for(let i=0;i<secondRim.length;i+=4) {
+    if(secondRim[i]>235 && secondRim[i+1]>80 && secondRim[i+2]<130)brightRim++;
+  }
+  results.push(`${brightRim>150?'PASS':'FAIL'} Second-pass rim retains incandescent orange fire (${brightRim} bright pixels)`);
+
+  // Compare real GPU output against the requested recovery reference. Only
+  // the near-healed rim may change; early and mid recovery stay identical.
+  const referenceRecovery = program(RECOVERY_COMPOSITE_FS
+    .replace('holeDist = mix(min(holeDist, -2.0 * px), holeDist, smoothstep(0.44, 0.485, burn));','')
+    .replace('holeDist = mix(holeDist, max(holeDist, 14.0 * px), smoothstep(0.535, 0.56, burn));','')
+    .replace('float rimMemory = smoothstep(0.05, 0.18, max(burn, charState));','')
+    .replace('spentHold * rimMemory','spentHold')
+    .replace('shoulder *= rimMemory;','')
+    .replace('lip *= mix(smoothstep(-0.8 * px, 0.8 * px, holeDist), 1.0, rimMemory);',''));
+  function recoveryFrame(p,damage,spent=255) {
+    composite=p; gl.useProgram(p);
+    [state,noise,fire,ice].forEach((t,i)=>{
+      gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,t);
+      gl.uniform1i(gl.getUniformLocation(p,['uState','uNoise','uFire','uIce'][i]),i);
+    });
+    set2('uResolution',640,360);set2('uSimSize',512,288);
+    set2('uFireSize',1,1);set2('uIceSize',1,1);set2('uPointerUv',0.5,0.5);
+    set1('uPixelScale',1);set1('uEdgeChaos',1);set1('uFlicker',1);set1('uTime',11.3);
+    set1('uTailBlend',0); set1('uTailCeiling',1);
+    const d=Math.round(damage*255);
+    return renderState(1,1,new Uint8Array([d,0,d,spent]));
+  }
+  for(const damage of [0.565,0.60,0.68]) {
+    const open=recoveryFrame(recoveryComposite,damage);
+    let fragments=0;
+    for(let i=0;i<open.length;i+=4)if(Math.max(...iceColor.slice(0,3).map((c,k)=>Math.abs(c-open[i+k])))>2)fragments++;
+    results.push(`${fragments===0?'PASS':'FAIL'} Vortex handoff at consumed damage ${damage}: ${fragments} resurfacing fragments`);
+  }
+  for(const damage of [0.2,0.3]) {
+    const old=recoveryFrame(referenceRecovery,damage), fixed=recoveryFrame(recoveryComposite,damage);
+    results.push(`${old.every((v,i)=>v===fixed[i])?'PASS':'FAIL'} Original recovery is pixel-identical at damage ${damage}`);
+  }
+  for(const damage of [0.04,0.05,0.07,0.10]) {
+    const old=recoveryFrame(referenceRecovery,damage), fixed=recoveryFrame(recoveryComposite,damage);
+    let oldMin=255,newMin=255,pits=0;
+    for(let i=0;i<fixed.length;i+=4) {
+      oldMin=Math.min(oldMin,old[i]);newMin=Math.min(newMin,fixed[i]);
+      if(fixed[i]<100)pits++;
+    }
+    results.push(`${pits===0 && newMin>=oldMin?'PASS':'FAIL'} Late recovery ${damage}: ${pits} dark pits; minimum paint luminance ${oldMin} → ${newMin}`);
+  }
+
+  recoveryFrame(recoveryComposite,0.09);
+  set1('uTailBlend',1);set1('uTailCeiling',0.102);
+  const stamp = new Uint8Array(512*288*4);
+  for(let y=0;y<288;y++)for(let x=0;x<512;x++) {
+    const d=0.09+0.25*Math.exp(-((x-256)**2+(y-144)**2)/220);
+    const i=(y*512+x)*4;
+    stamp[i]=stamp[i+2]=Math.round(d*255);stamp[i+3]=255;
+  }
+  const settled=renderState(512,288,stamp);
+  let stampedPits=0;
+  for(let i=0;i<settled.length;i+=4)if(settled[i]<100)stampedPits++;
+  results.push(`${stampedPits===0?'PASS':'FAIL'} Isolated deep source stamp settles into the late veil (${stampedPits} dark pixels)`);
+
+  // Exercise the actual one-time handoff pass on several deep source stamps.
+  const settle=program(RECOVERY_SETTLE_FS);
+  composite=settle;gl.useProgram(settle);
+  gl.uniform1i(gl.getUniformLocation(settle,'uState'),0);
+  gl.uniform3f(gl.getUniformLocation(settle,'uConsumedSheet'),0.65,0.67,0.6);
+  const consumed=new Uint8Array(512*288*4);
+  for(let y=0;y<288;y++)for(let x=0;x<512;x++) {
+    let d=0.58+0.06*x/511;
+    for(const [cx,cy] of [[70,50],[180,90],[330,60],[400,220]])d+=0.35*Math.exp(-((x-cx)**2+(y-cy)**2)/250);
+    const i=(y*512+x)*4;
+    consumed[i]=Math.round(Math.min(d,1)*255);
+    consumed[i+1]=26;consumed[i+2]=Math.round(Math.min(d+0.02,1)*255);
+    consumed[i+3]=Math.round(Math.min(d+0.10,1)*255);
+  }
+  // The visible canvas is alpha:false, so inspect state alpha in an RGBA FBO.
+  const settleTarget=texture(640,360,null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,settleTarget,0);
+  const settledState=renderState(512,288,consumed);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.deleteTexture(settleTarget);
+  let maxBurn=0,maxChar=0,minBurn=255,badHeat=0,badSpent=0;
+  for(let i=0;i<settledState.length;i+=4) {
+    maxBurn=Math.max(maxBurn,settledState[i]);minBurn=Math.min(minBurn,settledState[i]);
+    maxChar=Math.max(maxChar,settledState[i+2]);
+    if(settledState[i+1]!==26)badHeat++;
+    if(Math.abs(settledState[i+3]-153)>1)badSpent++;
+  }
+  results.push(`${maxBurn<=166 && maxChar<=171 && minBurn<160?'PASS':'FAIL'} Full-burn handoff removes excess source depth while retaining shallower contour (${minBurn}–${maxBurn}, char ${maxChar})`);
+  results.push(`${badHeat===0 && badSpent===0?'PASS':'FAIL'} Handoff preserves temperature and removes history perforations (${badHeat} heat errors, ${badSpent} history errors)`);
+
+  // The actual text shader must keep idle ivory pixel-identical across cursor
+  // phases, and confine both hover responses to the contact neighbourhood.
+  const font = new FontFace('TestNarri', 'url(../Assets/Font/narri-regular.woff2)');
+  document.fonts.add(await font.load());
+  const mask = document.createElement('canvas'); mask.width=320; mask.height=160;
+  const ink = mask.getContext('2d'); ink.font='72px TestNarri'; ink.fillStyle='white';
+  ink.fillText('Elyxee',30,100);
+  const type = program(TYPE_FRAGMENT,TYPE_VERTEX,'aPosition'); gl.useProgram(type);
+  gl.activeTexture(gl.TEXTURE0);
+  texture(1,1,new Uint8Array([0,0,0,0]));
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,mask);
+  canvas.width=320; canvas.height=160; gl.viewport(0,0,320,160);
+  const uniform = name=>gl.getUniformLocation(type,name);
+  gl.uniform1i(uniform('uMask'),0); gl.uniform2f(uniform('uSize'),320,160);
+  gl.uniform2f(uniform('uPointer'),110,80); gl.uniform1f(uniform('uRadius'),44); gl.uniform1f(uniform('uVortexRadius'),44);
+  gl.uniform1f(uniform('uMotion'),1);
+  function renderType(contact,cold,time) {
+    gl.uniform3fv(uniform('uFireSites[0]'),new Float32Array([110,80,contact,-1000,-1000,0,-1000,-1000,0,-1000,-1000,0]));
+    gl.uniform1f(uniform('uContact'),contact); gl.uniform1f(uniform('uCold'),cold);
+    gl.uniform1f(uniform('uTime'),time); gl.drawArrays(gl.TRIANGLES,0,3);
+    const pixels=new Uint8Array(320*160*4);
+    gl.readPixels(0,0,320,160,gl.RGBA,gl.UNSIGNED_BYTE,pixels); return pixels;
+  }
+  const baseline=renderType(0,0,0);
+  const check=(ok,message)=>results.push(`${ok?'PASS':'FAIL'} ${message}`);
+  check(baseline.some((v,i)=>i%4!==3&&v>0),'Ivory glyph mask renders non-empty');
+  for(const cold of [0.45,1]) {
+    const idle=renderType(0,cold,9);
+    check(idle.every((v,i)=>v===baseline[i]),`Idle ivory is pixel-identical at cursor blend ${cold}`);
+  }
+  for(const cold of [0,1]) {
+    const hover=renderType(1,cold,3.4);
+    let changed=0,outside=0,flamePixels=0;
+    for(let i=0;i<hover.length;i+=4) {
+      const differs=[0,1,2].some(k=>hover[i+k]!==baseline[i+k]);
+      if(!differs)continue;
+      changed++;
+      const x=(i/4)%320+0.5,y=160-Math.floor(i/4/320)-0.5;
+      // Flames may rise from touched ink by up to 60px and sway up to 7px.
+      // Vortex refraction remains within the original contact radius.
+      const within = cold ? Math.hypot(x-110,y-80)<=45
+        : Math.hypot(Math.max(0,Math.abs(x-110)-7),Math.max(0,y-80,20-y))<=45;
+      if(!within)outside++;
+      if(!cold && baseline[i]+baseline[i+1]+baseline[i+2]===0 && hover[i]>120 && hover[i+1]>40)flamePixels++;
+    }
+    check(changed>30&&outside===0,`${cold?'Vortex':'Flame'} hover changes only local glyph pixels (${changed}, outside: ${outside})`);
+    if(cold) {
+      const next=renderType(1,1,3.8);
+      let moving=0,strong=0;
+      for(let i=0;i<next.length;i+=4) {
+        if(Math.max(...[0,1,2].map(k=>Math.abs(next[i+k]-hover[i+k])))>25)moving++;
+        if(Math.max(...[0,1,2].map(k=>Math.abs(hover[i+k]-baseline[i+k])))>45)strong++;
+      }
+      check(moving>150 && strong>150,`Vortex visibly carries and refracts the ink (${moving} moving, ${strong} strong-response pixels)`);
+    }
+    if(!cold) {
+      check(flamePixels>150,`Visible fire rises outside the letter silhouettes (${flamePixels} bright pixels)`);
+      const next=renderType(1,0,3.8);
+      let animatedFire=0;
+      for(let i=0;i<next.length;i+=4) {
+        if(baseline[i]+baseline[i+1]+baseline[i+2]===0 && Math.abs(next[i]-hover[i])>30)animatedFire++;
+      }
+      check(animatedFire>100,`Fire tongues move over time (${animatedFire} changing pixels)`);
+    }
+  }
+  gl.uniform2f(uniform('uPointer'),300,80);
+  gl.uniform1f(uniform('uVortexRadius'),200);
+  const approaching=renderType(1,1,3.4);
+  let influenced=0;
+  for(let i=0;i<approaching.length;i+=4) {
+    const x=(i/4)%320+0.5,y=160-Math.floor(i/4/320)-0.5;
+    if(Math.hypot(x-300,y-80)>60 && [0,1,2].some(k=>Math.abs(approaching[i+k]-baseline[i+k])>20))influenced++;
+  }
+  check(influenced>400,`Nearby vortex affects ink without a direct hover (${influenced} responding pixels beyond flame range)`);
+  gl.uniform2f(uniform('uPointer'),110,80); gl.uniform1f(uniform('uVortexRadius'),44);
+  const visibleFire = energy => {
+    const pixels=renderType(energy,0,3.4);
+    let count=0;
+    for(let i=0;i<pixels.length;i+=4) {
+      if(baseline[i]+baseline[i+1]+baseline[i+2]===0 && pixels[i]>100)count++;
+    }
+    return count;
+  };
+  const warm=visibleFire(0.15), growing=visibleFire(0.6), mature=visibleFire(1);
+  check(warm===0 && growing>0 && mature>growing,`Ignition grows visibly from warmth to flame (${warm}, ${growing}, ${mature} fire pixels)`);
+  const restored=renderType(0,1,17);
+  check(restored.every((v,i)=>v===baseline[i]),'Leaving hover restores exactly the original ivory');
+  output.dataset.result=results.some(r=>r.startsWith('FAIL'))?'fail':'pass';
+  output.textContent=results.join('\n');
+} catch(error){ output.dataset.result='fail'; output.textContent=String(error); }
+</script>
+</html>

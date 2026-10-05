@@ -1,0 +1,37 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Portrait artwork mounting checks</title>
+<style>
+body{margin:24px;background:#202326;color:#eee;font:14px Arial}h1{font-size:20px}main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}figure{margin:0;background:#363a3d;padding:12px}canvas{width:100%;height:auto}figcaption{margin-top:8px}#result{white-space:pre-wrap}
+</style>
+<h1>Portrait artwork mounting checks</h1>
+<p id="result">Checking all 22 frame / artwork combinations…</p><main></main>
+<script type="module">
+import { FRAME_ITEMS } from '../components/portrait/gallery-items.js';
+import { DUST_ARTWORKS, SPACE_ARTWORKS, loadGalleryImage, mountArtwork, artworkFor } from '../components/portrait/artworks.js';
+const frames=FRAME_ITEMS.filter(item=>item.scene===1||['24:588','24:598'].includes(item.id));
+let count=0;
+try {
+  for(const frameItem of frames) {
+    const item={...frameItem,frameId:frameItem.id};
+    const frame=await loadGalleryImage(new URL(item.src,new URL('../components/portrait/',location.href)).href);
+    for(const art of item.scene ? SPACE_ARTWORKS : [artworkFor(item)]) {
+      const image=await loadGalleryImage(art.src);
+      const mounted=mountArtwork(frame,image,item);
+      if(mounted.width!==frame.naturalWidth||mounted.height!==frame.naturalHeight) throw Error('Gallery slot changed');
+      if(mountArtwork(frame,image,item)!==mounted) throw Error('Mount cache failed');
+      const figure=document.createElement('figure'), display=document.createElement('canvas');
+      display.width=mounted.width;display.height=mounted.height;
+      const ctx=display.getContext('2d');
+      // Present reflected frames as they appear in the scene, with readable text.
+      const [a,b,c,d]=item.matrix;
+      if(a*d-b*c<0){ctx.translate(display.width,0);ctx.scale(-1,1);}
+      ctx.drawImage(mounted,0,0);
+      const caption=document.createElement('figcaption');
+      caption.textContent=`${item.material} · ${art.src.split('/').pop()}`;
+      figure.append(display,caption);document.querySelector('main').append(figure);count++;
+    }
+  }
+  document.querySelector('#result').textContent=`PASS: ${count} mounted combinations; original texture dimensions and cache preserved. Inspect complete titles, edge-to-edge prints and intact rims below.`;
+} catch(error) {document.querySelector('#result').textContent=`FAIL: ${error.stack}`;throw error;}
+</script>

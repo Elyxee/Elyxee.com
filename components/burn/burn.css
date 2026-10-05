@@ -27,9 +27,14 @@ html[data-burn-phase="recovering"] #cursor-fx {
   transition: opacity 620ms cubic-bezier(0.35, 0, 0.75, 0.35);
 }
 
-/* Coming back, the burst's flash leads and the flame arrives just behind it. */
 html:not([data-burn-phase="recovering"]) #cursor-fx {
   transition: opacity 260ms cubic-bezier(0.2, 0.7, 0.4, 1) 120ms;
+}
+
+/* Coming back from the vortex, the thawed ember leads and the flame grows in
+   over it. Only for that handoff; normal pointer entry keeps the timing above. */
+html[data-burn-thaw]:not([data-burn-phase="recovering"]) #cursor-fx {
+  transition: opacity 700ms cubic-bezier(0.35, 0, 0.25, 1) 480ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -38,7 +43,8 @@ html:not([data-burn-phase="recovering"]) #cursor-fx {
   }
 
   html[data-burn-phase="recovering"] #cursor-fx,
-  html:not([data-burn-phase="recovering"]) #cursor-fx {
+  html:not([data-burn-phase="recovering"]) #cursor-fx,
+  html[data-burn-thaw]:not([data-burn-phase="recovering"]) #cursor-fx {
     transition-duration: 0.01ms;
   }
 }

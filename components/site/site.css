@@ -1,0 +1,112 @@
+/* Site shell: the burn scene and the Dust & Space portrait share one page.
+   Each module keeps its own DOM, styles and input handling; these rules only
+   stack the two as full-viewport layers and place the fire curtain and cursor
+   handoff over them. Nothing here reaches inside either module. */
+
+html,
+body {
+  /* Opaque underlay while the reconstructed opening initializes. */
+  background: #050403;
+}
+
+body {
+  background-image: none;
+}
+
+.stage {
+  position: fixed;
+  inset: 0;
+  overflow: clip;
+  contain: paint;
+}
+
+.stage-inscriptions {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+  user-select: none;
+  overflow: clip;
+  contain: paint;
+}
+
+/* The burn layer carries the Fire.jpg first-paint underlay so its WebGL frame
+   and the sheet beneath it are still one picture. */
+.stage--burn {
+  z-index: 1;
+  background: #0d0b09 url("../../Assets/background/Fire-clean.png") center / cover no-repeat;
+}
+
+/* Sits above the flame cursor and the inscription canvases; the portrait is
+   opaque, so once shown it fully replaces the burn scene. */
+.stage--portrait {
+  z-index: 10002;
+  visibility: hidden;
+}
+
+.stage.is-hidden { visibility: hidden; }
+.stage--portrait.is-shown { visibility: visible; }
+
+.stage--portrait .portrait {
+  height: 100%;
+  min-height: 0;
+}
+
+/* A continuous fire front and cursor handoff over the shared scene reveal. */
+#stage-fire {
+  position: fixed;
+  inset: 0;
+  z-index: 10003;
+  display: none;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  contain: strict;
+}
+#stage-fire.is-live { display: block; }
+
+.stage-fire--fallback {
+  background: #000;
+  opacity: var(--fire-cover, 0);
+}
+
+#stage-cursor {
+  position: fixed;
+  inset: 0;
+  z-index: 10004;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  contain: strict;
+}
+
+/* The flame cursor belongs to the burn scene. It is already covered by the
+   portrait layer; skip compositing it while the portrait is on screen. */
+html[data-stage="portrait"] #cursor-fx { visibility: hidden; }
+html[data-stage="intro"] #cursor-fx { visibility: hidden; }
+html[data-stage="transit"] #cursor-fx { opacity: var(--burn-pointer-opacity, 1); }
+
+/* System cursor. cursor.js hides it for the flame. In Space the portrait's
+   black hole is the pointer, so it stays hidden; the liquid in Dust is a
+   trail rather than a marker, so the arrow returns there. The scene switch
+   always shows a hand. */
+@media (hover: hover) and (pointer: fine) {
+  html.cursor-ready[data-stage="portrait"] .portrait[data-scene="dust"],
+  html.cursor-ready[data-stage="portrait"] .portrait[data-scene="dust"] * {
+    cursor: auto !important;
+  }
+  html.cursor-ready[data-stage="portrait"] .portrait[data-scene] .scene-switch,
+  html.cursor-ready[data-stage="portrait"] .portrait[data-scene] .scene-switch *,
+  html.cursor-ready[data-stage="transit"] .portrait[data-scene] .scene-switch,
+  html.cursor-ready[data-stage="transit"] .portrait[data-scene] .scene-switch *,
+  html.cursor-ready[data-stage="portrait"] .portrait[data-scene] .portrait-home,
+  html.cursor-ready[data-stage="transit"] .portrait[data-scene] .portrait-home {
+    cursor: pointer !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage { will-change: auto; }
+}

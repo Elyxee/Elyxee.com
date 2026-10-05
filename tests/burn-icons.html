@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Burn icon material interaction</title>
+<link rel="stylesheet" href="../styles.css?v=74">
+<style>body{background:#14242c}pre{position:fixed;bottom:20px;left:20px;color:white;font:12px monospace;white-space:pre-wrap}</style>
+<main class="burn-content"><div class="burn-socials" role="group" aria-label="Social media">
+<img class="burn-social" data-inscription-icon src="../Assets/Elements/Snapchat.png" alt="Snapchat" width="32" height="32">
+<img class="burn-social" data-inscription-icon src="../Assets/Elements/Instagram.png" alt="Instagram" width="32" height="32">
+<img class="burn-social" data-inscription-icon src="../Assets/Elements/X.png" alt="X" width="32" height="32">
+<img class="burn-social" data-inscription-icon src="../Assets/Elements/Wechat.png" alt="Wechat" width="32" height="32">
+<img class="burn-social" data-inscription-icon src="../Assets/Elements/Weibo.png" alt="Weibo" width="32" height="32">
+<img class="burn-social" data-inscription-icon src="../Assets/Elements/Bilibili.png" alt="Bilibili" width="32" height="32">
+</div></main><pre id="status">Running typography interaction checks…</pre>
+<script type="module">
+import {initBurnTypography} from '../components/burn/type/typography.js?v=74';
+const type = await initBurnTypography({selector:'.burn-socials',artwork:true});
+const output=document.querySelector('pre'), results=[];
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const move=(x,y)=>document.dispatchEvent(new PointerEvent('pointermove',{clientX:x,clientY:y,pointerType:'mouse'}));
+function check(ok,message){if(!ok)throw new Error(message);results.push(`PASS ${message}`);output.textContent=results.join('\n');}
+try {
+  const icons=[...document.querySelectorAll('[data-inscription-icon]')];
+  check(icons.length===6 && icons.every(x=>x.complete && x.naturalWidth>0),'All six supplied icon assets load');
+  const boxes=icons.map(x=>x.getBoundingClientRect());
+  check(boxes.every(x=>Math.abs(x.top-boxes[0].top)<1 && x.width<=34),'Six compact icons share one row');
+  check(document.querySelector('.burn-socials').hasAttribute('data-material-ready'),'Icons use the shared inscription material');
+  const title={...boxes[0].toJSON(),right:boxes[5].right};
+  // Just outside the line's ink, inside the new forgiving 6–12px margin.
+  move(title.left-4,boxes[0].top+boxes[0].height/2);
+  await wait(120);
+  check(Math.max(...type.getState().embers.map(s=>s.energy))<0.25,'Entry starts warming; no fully lit flame flashes in');
+  await wait(800);
+  check(Math.max(...type.getState().embers.map(s=>s.energy))>0.95,'Near-letter hover grows gradually to full fire');
+  const ignited=type.getState().embers.find(s=>s.energy>0.95);
+  move(title.right-8,boxes[0].top+boxes[0].height/2);
+  await wait(120);
+  const moved=type.getState().embers;
+  check(moved.some(s=>s.x===ignited.x && s.energy>0.9),'Moving to another letter leaves the old flame attached');
+  check(moved.some(s=>s.x!==ignited.x && s.energy>0 && s.energy<0.3),'New letter warms independently rather than inheriting a flash');
+  move(innerWidth/2,innerHeight/2);
+  await wait(500);
+  check(type.getState().embers.some(s=>s.energy>0.7),'A visible flame tail remains half a second after leaving');
+  await wait(1600);
+  check(type.getState().embers.every(s=>s.energy===0),'All flames finish their extinction and restore idle ivory');
+  document.documentElement.dataset.burnPhase='recovering';
+  move(title.right+55,boxes[0].top+boxes[0].height/2);
+  await wait(1600);
+  check(type.getState().cold>0.99 && type.getState().contact>0.95,'Nearby vortex reaches the text even 55px outside its hit area');
+  move(innerWidth+500,innerHeight+500);
+  await wait(1200);
+  check(type.getState().contact<0.02,'Distant vortex releases the letters back to ivory');
+  output.dataset.result='pass';
+  if(new URLSearchParams(location.search).has('showFire')) {
+    document.documentElement.dataset.burnPhase='pinpoint';
+    move(boxes[2].left+boxes[2].width/2,boxes[2].top+boxes[2].height/2);
+  }
+  if(new URLSearchParams(location.search).has('showCold')) {
+    document.documentElement.dataset.burnPhase='recovering';
+    move(boxes[2].left+boxes[2].width/2,boxes[2].top-40);
+  }
+} catch(error){output.dataset.result='fail';output.textContent=results.join('\n')+'\nFAIL '+error.message;}
+</script></html>

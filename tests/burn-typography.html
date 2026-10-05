@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Burn typography interaction</title>
+<link rel="stylesheet" href="../styles.css?v=74">
+<style>body{background:#14242c}pre{position:fixed;bottom:20px;left:20px;color:white;font:12px monospace;white-space:pre-wrap}</style>
+<main class="burn-content"><header class="burn-mark">
+<div class="burn-mark__name" data-inscription-line>Elyxee</div>
+<div class="burn-mark__copyright" data-inscription-line>// Copyright  © 2027</div>
+<div class="burn-mark__motto"><span data-inscription-line>Ju Yi</span><span data-inscription-line>The Best Ever. ✞</span><span class="burn-mark__hebrew" dir="rtl" lang="he" data-inscription-line>אַל־תִּירָא</span></div>
+</header></main><pre id="status">Running typography interaction checks…</pre>
+<script type="module">
+import {initBurnTypography} from '../components/burn/type/typography.js?v=74';
+const type = await initBurnTypography();
+const output=document.querySelector('pre'), results=[];
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const move=(x,y)=>document.dispatchEvent(new PointerEvent('pointermove',{clientX:x,clientY:y,pointerType:'mouse'}));
+function check(ok,message){if(!ok)throw new Error(message);results.push(`PASS ${message}`);output.textContent=results.join('\n');}
+try {
+  await document.fonts.ready;
+  const measure=document.createElement('canvas').getContext('2d');
+  function inkBounds(node) {
+    const style=getComputedStyle(node), box=node.getBoundingClientRect();
+    measure.font=`${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const m=measure.measureText(node.textContent);
+    const baseline=box.top+(parseFloat(style.lineHeight)-m.fontBoundingBoxAscent-m.fontBoundingBoxDescent)/2+m.fontBoundingBoxAscent;
+    return {top:baseline-m.actualBoundingBoxAscent,bottom:baseline+m.actualBoundingBoxDescent};
+  }
+  const titleInk=inkBounds(document.querySelector('.burn-mark__name'));
+  const copyInk=inkBounds(document.querySelector('.burn-mark__copyright'));
+  check(copyInk.top-titleInk.bottom>=6,`Actual title descender clears copyright by ${(copyInk.top-titleInk.bottom).toFixed(1)} CSS pixels`);
+  const title=document.querySelector('.burn-mark__name').getBoundingClientRect();
+  // Just outside the line's ink, inside the new forgiving 6–12px margin.
+  move(title.left-4,title.top+title.height/2);
+  await wait(120);
+  check(Math.max(...type.getState().embers.map(s=>s.energy))<0.25,'Entry starts warming; no fully lit flame flashes in');
+  await wait(800);
+  check(Math.max(...type.getState().embers.map(s=>s.energy))>0.95,'Near-letter hover grows gradually to full fire');
+  const ignited=type.getState().embers.find(s=>s.energy>0.95);
+  move(title.right-8,title.top+title.height/2);
+  await wait(120);
+  const moved=type.getState().embers;
+  check(moved.some(s=>s.x===ignited.x && s.energy>0.9),'Moving to another letter leaves the old flame attached');
+  check(moved.some(s=>s.x!==ignited.x && s.energy>0 && s.energy<0.3),'New letter warms independently rather than inheriting a flash');
+  move(innerWidth-50,innerHeight-50);
+  await wait(500);
+  check(type.getState().embers.some(s=>s.energy>0.7),'A visible flame tail remains half a second after leaving');
+  await wait(1600);
+  check(type.getState().embers.every(s=>s.energy===0),'All flames finish their extinction and restore idle ivory');
+  document.documentElement.dataset.burnPhase='recovering';
+  move(title.right+55,title.top+title.height/2);
+  await wait(1600);
+  check(type.getState().cold>0.99 && type.getState().contact>0.95,'Nearby vortex reaches the text even 55px outside its hit area');
+  move(innerWidth+500,innerHeight+500);
+  await wait(1200);
+  check(type.getState().contact<0.02,'Distant vortex releases the letters back to ivory');
+  output.dataset.result='pass';
+} catch(error){output.dataset.result='fail';output.textContent=results.join('\n')+'\nFAIL '+error.message;}
+</script></html>

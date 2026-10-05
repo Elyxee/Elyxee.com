@@ -3,25 +3,87 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050403" />
     <meta name="description" content="Elyxee" />
     <title>Elyxee</title>
     <link rel="icon" href="data:," />
-    <link rel="preload" as="image" href="Assets/background/Fire.jpg" />
-    <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="components/cursor/cursor.css" />
+    <link rel="preload" as="image" href="Assets/background/Fire-clean.png" />
+    <link rel="preload" as="image" href="Assets/Transitions/combustion-cloud.png" />
+    <link rel="preload" as="font" href="Assets/Font/narri-regular.woff2" type="font/woff2" crossorigin />
+    <link rel="preload" as="font" href="Assets/Font/Gabriela-Regular.ttf" type="font/ttf" crossorigin />
+    <link rel="stylesheet" href="styles.css?v=87" />
+    <link rel="stylesheet" href="components/cursor/cursor.css?v=38" />
+    <link rel="stylesheet" href="components/portrait/portrait.css?v=7" />
+    <link rel="stylesheet" href="components/site/site.css?v=8" />
+    <link rel="stylesheet" href="components/about/about.css?v=2" />
+    <link rel="stylesheet" href="components/site/page-passage.css?v=2" />
   </head>
 
   <body>
+    <!-- Burn scene: the same markup its own page had, wrapped as a layer. -->
+    <div class="stage stage--burn is-hidden" data-stage-layer="burn">
+      <canvas id="burn-fx" aria-hidden="true"></canvas>
+
+      <main class="burn-content" aria-label="Elyxee burn scene">
+        <header class="burn-mark" aria-label="Elyxee">
+          <div class="burn-mark__name" data-inscription-line>Elyxee</div>
+          <div class="burn-mark__copyright" data-inscription-line>// Copyright&nbsp; © 2027</div>
+          <p class="burn-mark__motto"><span data-inscription-line>Ju Yi</span><span data-inscription-line>The Best Ever. ✞</span><span class="burn-mark__hebrew" data-inscription-line dir="rtl" lang="he">אַל־תִּירָא</span></p>
+        </header>
+
+      </main>
+
+      <nav class="burn-nav" aria-label="Main navigation">
+        <a class="burn-nav__home" href="#home" data-burn-destination="0" aria-current="page"><span data-inscription-line>/// Home</span></a>
+        <a href="#portfolio" data-burn-destination="1"><span data-inscription-line>Portfolio &amp; Blog</span></a>
+        <a href="about.html"><span data-inscription-line>About</span></a>
+      </nav>
+
+      <nav class="burn-socials" aria-label="Social media">
+        <a class="social-control" href="https://www.snapchat.com/@elyxee33" target="_blank" rel="noopener noreferrer" aria-label="Snapchat（新标签页）">
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Snapchat.png" alt="" width="32" height="32" />
+        </a>
+        <a class="social-control" href="https://www.instagram.com/elyxeedotfaith" target="_blank" rel="noopener noreferrer" aria-label="Instagram（新标签页）">
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Instagram.png" alt="" width="32" height="32" />
+        </a>
+        <a class="social-control" href="https://x.com/elyxeedotfaith" target="_blank" rel="noopener noreferrer" aria-label="X（新标签页）">
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/X.png" alt="" width="32" height="32" />
+        </a>
+        <button class="social-control" type="button" data-wechat-copy data-wechat-id="WEWHOWRESTLEWITHGOD_" aria-label="WeChat：复制微信号 WEWHOWRESTLEWITHGOD_">
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Wechat.png" alt="" width="32" height="32" />
+        </button>
+        <a class="social-control" href="https://weibo.com/u/7785598560" target="_blank" rel="noopener noreferrer" aria-label="Weibo（新标签页）">
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Weibo.png" alt="" width="32" height="32" />
+        </a>
+        <a class="social-control" href="https://space.bilibili.com/3546628216588646" target="_blank" rel="noopener noreferrer" aria-label="Bilibili（新标签页）">
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Bilibili.png" alt="" width="32" height="32" />
+        </a>
+        <span class="social-status" role="status" aria-live="polite"></span>
+      </nav>
+    </div>
+
     <canvas id="cursor-fx" aria-hidden="true"></canvas>
     <div class="cursor-touch-note" aria-hidden="true">
       This experience responds to a mouse or trackpad.
     </div>
 
-    <script type="module">
-      import { initBurn } from "./components/burn/index.js?v=35";
-      import { initCursor } from "./components/cursor/index.js?v=35";
-      initBurn();
-      initCursor();
-    </script>
+    <!-- Dust & Space portrait: the same markup portrait.html has, reached by scrolling. -->
+    <div class="stage stage--portrait" data-stage-layer="portrait" aria-hidden="true" inert>
+      <main class="portrait" aria-label="Elyxee，移动鼠标探索另一面的肖像">
+        <div class="portrait__fallback" aria-hidden="true">
+          <div class="portrait__composition">
+            <img class="portrait__head portrait__head--veiled" src="Assets/Portrait/veiled.png" alt="" />
+            <img class="portrait__head portrait__head--crowned" src="Assets/Portrait/crowned.png" alt="" />
+          </div>
+        </div>
+        <canvas id="portrait-fx" aria-hidden="true"></canvas>
+        <button class="scene-switch" type="button" disabled aria-label="Podcast &amp; Essay，切换到沙尘场景">
+          <span class="scene-switch__label">Podcast &amp; Essay</span>
+        </button>
+        <span class="sr-only" role="status" id="scene-status">星空肖像。移动鼠标或在屏幕上拖动，揭露面纱肖像。</span>
+      </main>
+    </div>
+
+    <script type="module" src="components/site/site.js?v=21"></script>
   </body>
 </html>

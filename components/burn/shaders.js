@@ -1,5 +1,7 @@
 // GLSL ES 1.00 — runs unmodified on both WebGL1 and WebGL2 contexts.
 
+import { REIGNITE_GLSL } from "./reignite-visual.js?v=1";
+
 export const QUAD_VS = `
 attribute vec2 aPos;
 varying vec2 vUv;
@@ -243,13 +245,33 @@ void main() {
   // refuse neighbour pull unless the source is on them, so a recovering hole
   // cannot be eaten again by a front still running elsewhere. Pinpoint mode:
   // only underSource advances the field.
-  float drop = uSpreadDrop * (0.18 + 1.90 * mix(fuelLow, mix(grain, grainFine, 0.45), 0.45));
+  // Let the material choose how far each bit of the front can travel. The old
+  // almost-uniform drop made the first pass trace the simulation's axis-aligned
+  // distance field; a broader fuel sample gives the front soft bays and tongues
+  // like a sheet burning through at different speeds.
+  float edgeFuel = mix(fuelLow, fuelMid, 0.58);
+  float edgeBreak = texture2D(uNoise, ap * 3.15 + vec2(0.17, 0.49)).g;
+  float drop = uSpreadDrop * (
+      0.16
+    + 2.45 * edgeFuel
+    + 0.66 * mix(grain, edgeBreak, 0.55)
+  );
+  // Keep the diagonal cost so propagation follows a rounded distance field
+  // instead of favouring the four screen axes. The contour pass below adds a
+  // slower organic displacement on top, which breaks up long grid-aligned runs
+  // without slowing the established first-pass timing.
   float target = max(burnOrtho - drop, burnDiag - drop * 1.4142);
   float spreadGate = mix(
     underSource,
     alive * sheetFuel * mix(1.0, underSource, smoothstep(0.45, 0.95, spent)),
     uSpreadMode
   );
+  // Virgin material does not carry a front uniformly. Low-fuel pockets let the
+  // ember stall for a moment while neighbouring hot patches keep moving, which
+  // creates the little coves and tongues that a clean distance field cannot.
+  float materialSignal = edgeFuel + 0.18 * (edgeBreak - 0.5);
+  float materialGate = clamp(0.45 + 0.72 * smoothstep(0.24, 0.80, materialSignal), 0.45, 1.0);
+  spreadGate *= mix(1.0, materialGate, uSpreadMode);
   burn = max(burn, mix(burn, target, clamp(uDt * uSpreadRate, 0.0, 1.0) * spreadGate));
 
   // Damage keeps accumulating past burn-through, so a spot that was held under
@@ -277,7 +299,7 @@ void main() {
   // the opening itself knits shut, since the rim's speed is set at the contour.
   // The boost switches off again as carbon nears the level where the sheet
   // shows through (~0.18), so the paper's actual return keeps its own pace.
-  float veil = 1.0 + uVeilHeal * smoothstep(0.50, 0.42, burn) * smoothstep(0.12, 0.22, charred);
+  float veil = 1.0 + uVeilHeal * (1.0 - smoothstep(0.42, 0.50, burn)) * smoothstep(0.12, 0.22, charred);
   burn -= uDt * uHealBurn * cold * healJitter * (0.85 + 0.15 * burn) * uHealScale * veil;
   burn = clamp(burn, 0.0, uDepthMax);
 
@@ -297,7 +319,7 @@ void main() {
   // Mid-recovery: the hole is knitting shut but carbon still blankets the sheet
   // — the long all-ash phase. Nudge char down faster here only; hold and tail
   // are untouched because this window needs burn in (0.26, 0.52) and char high.
-  float midPlateau = smoothstep(0.22, 0.50, charred) * smoothstep(0.52, 0.26, burn);
+  float midPlateau = smoothstep(0.22, 0.50, charred) * (1.0 - smoothstep(0.26, 0.52, burn));
   charred -= uDt * uAshMidFade * midPlateau * charred * uHealScale;
   charred = clamp(charred, burn, uDepthMax);
 
@@ -319,7 +341,7 @@ void main() {
 // Reads the burn state and cuts the upper sheet away from the lower one.
 // Layers are measured as a signed distance to the burn contour, in pixels, so
 // char and ember widths stay constant no matter how steep the state field is.
-// No crossfade anywhere: the sheet is either present or gone.
+// Active fire has a crisp material edge. Recovery has its own reference shader.
 export const COMPOSITE_FS = `
 precision highp float;
 varying vec2 vUv;
@@ -370,6 +392,22 @@ vec4 sampleState(vec2 uv) {
   vec2 f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
   return texture2D(uState, (i + 0.5 + f) / uSimSize);
+}
+
+// The state is simulated on a deliberately small render target. Reconstructing
+// the burn channel from a tiny cross around the bilinear sample hides the last
+// bit of grid grain without blurring the char/heat layers that give the rim its
+// depth. This is most noticeable on the first pass, when the front is shallow.
+float sampleBurn(vec2 uv) {
+  vec2 texel = 1.0 / uSimSize;
+  float center = sampleState(uv).r * 0.52;
+  float cross = (
+      sampleState(uv + vec2(texel.x * 0.72, 0.0)).r
+    + sampleState(uv - vec2(texel.x * 0.72, 0.0)).r
+    + sampleState(uv + vec2(0.0, texel.y * 0.72)).r
+    + sampleState(uv - vec2(0.0, texel.y * 0.72)).r
+  ) * 0.12;
+  return center + cross;
 }
 
 void main() {
@@ -425,11 +463,18 @@ void main() {
   vec2 uvSheet = uv + uvWind * 0.62;
   vec2 apSheet = ap + wind * 0.62;
 
-  vec4 state = sampleState(uvSheet);
-  float burn = state.r;
+  // Warp the sampled state field itself by a slow material map. Displacing only
+  // the final contour leaves round mouse stamps intact; warping the field makes
+  // the front pull into soft lobes and pinches before the ember line is dressed.
+  vec2 contourWarpAp = (
+    texture2D(uNoise, apSheet * 1.85 + vec2(0.46, 0.08)).rg - 0.5
+  ) * 0.022;
+  vec2 uvContour = uvSheet + vec2(contourWarpAp.x / canvasAspect, contourWarpAp.y);
+
+  vec4 state = sampleState(uvContour);
+  float burn = sampleBurn(uvContour);
   float heat = state.g;
   float charState = state.b;
-  float spent = state.a;
 
   // Central differences on the state field, rescaled from sim texels to screen
   // pixels, turn the raw damage value into a distance we can dress in pixels.
@@ -440,8 +485,8 @@ void main() {
   // heals would stretch the dressed bands across the whole opening. This is the
   // furthest a band is ever allowed to claim it is from the contour.
   float minSlope = CONTOUR / (110.0 * px);
-  float dx = sampleState(uvSheet + vec2(texel.x, 0.0)).r - sampleState(uvSheet - vec2(texel.x, 0.0)).r;
-  float dy = sampleState(uvSheet + vec2(0.0, texel.y)).r - sampleState(uvSheet - vec2(0.0, texel.y)).r;
+  float dx = sampleBurn(uvContour + vec2(texel.x, 0.0)) - sampleBurn(uvContour - vec2(texel.x, 0.0));
+  float dy = sampleBurn(uvContour + vec2(0.0, texel.y)) - sampleBurn(uvContour - vec2(0.0, texel.y));
   vec2 gradient = vec2(dx, dy) * 0.5 / pixelsPerTexel;
   // Floored, because the field flattens out as it heals and an unbounded
   // reciprocal would stretch the dressed bands across the whole opening.
@@ -466,7 +511,7 @@ void main() {
   for (int i = 0; i < 8; i++) {
     float angle = rotation + float(i) * 0.7853982;
     vec2 dir = vec2(cos(angle), sin(angle));
-    float value = sampleState(uvSheet + dir * wide).b;
+    float value = sampleState(uvContour + dir * wide).b;
     charSoft += value * 0.10;
     moment += value * dir;
   }
@@ -483,10 +528,9 @@ void main() {
     float angle = wideRotation + float(i) * 1.0471976;
     // Plain bilinear: this gather is a blur already, so the eased sampling the
     // rim needs would only cost fetches here.
-    charWide += texture2D(uState, uvSheet + vec2(cos(angle), sin(angle)) * texel * WIDE).b;
+    charWide += texture2D(uState, uvContour + vec2(cos(angle), sin(angle)) * texel * WIDE).b;
   }
   charWide *= 0.1667;
-
   float holeDist = clamp((burn - CONTOUR) / slope, -600.0, 600.0);
   float charDist = clamp((charSoft - CONTOUR) / charSlope, -600.0, 600.0);
 
@@ -496,42 +540,58 @@ void main() {
   // with unrelated patterns — are spread across the rim, the crust edge and the
   // crust width, so the three never trace one another.
   vec2 warp = (texture2D(uNoise, apSheet * 0.9 + vec2(0.05, 0.37)).rg - 0.5) * 0.20;
-  vec4 o1 = texture2D(uNoise, (apSheet + warp) * 1.70 + vec2(0.13, 0.41));
-  vec4 o2 = texture2D(uNoise, (apSheet + warp) * 4.30 - vec2(0.27, 0.09));
-  vec4 o3 = texture2D(uNoise, (apSheet + warp) * 11.0 + vec2(0.63, 0.22));
-  vec4 o4 = texture2D(uNoise, (apSheet + warp) * 27.0 - vec2(0.41, 0.87));
+  vec4 o1 = texture2D(uNoise, (apSheet + warp) * 1.25 + vec2(0.13, 0.41));
+  vec4 o2 = texture2D(uNoise, (apSheet + warp) * 3.40 - vec2(0.27, 0.09));
+  vec4 o3 = texture2D(uNoise, (apSheet + warp) * 8.40 + vec2(0.63, 0.22));
+  vec4 o4 = texture2D(uNoise, (apSheet + warp) * 18.0 - vec2(0.41, 0.87));
+  // Low-frequency bulges are what make a first burn feel like a sheet giving
+  // way unevenly. They move the front by whole ember-band widths over a broad
+  // patch, so the result reads as a torn, combustible material rather than a
+  // smoothed polygon.
+  vec4 broad = texture2D(uNoise, (apSheet + warp * 0.6) * 0.62 + vec2(0.38, 0.17));
+  float organicChaos = (
+      (broad.r - 0.5) * 52.0
+    + (broad.g - 0.5) * 30.0
+  ) * uEdgeChaos * px;
   float chaos = (
       (o1.r - 0.5) * 17.0
-    + (o2.g - 0.5) * 12.0
-    + (o3.a - 0.5) * 5.5
-    + (o4.g - 0.5) * 2.5
+    + (o2.g - 0.5) * 10.0
+    + (o3.a - 0.5) * 4.8
+    + (o4.g - 0.5) * 2.2
   ) * uEdgeChaos * px;
+  float microChaos = (
+      texture2D(uNoise, apSheet * 34.0 + vec2(0.19, 0.73)).a - 0.5
+  ) * 5.2 * uEdgeChaos * px;
 
   // The crust gets its own displacement on top of a fraction of the opening's.
   // Sharing the offset outright would make its outer edge a parallel copy of the
   // rim, which is exactly what reads as an inked outline rather than charring.
   float charChaos = (
       (o1.b - 0.5) * 19.0
-    + (o2.r - 0.5) * 11.0
-    + (o3.g - 0.5) * 7.0
-    + (o4.a - 0.5) * 3.4
+    + (o2.r - 0.5) * 10.0
+    + (o3.g - 0.5) * 6.0
+    + (o4.a - 0.5) * 3.0
   ) * uEdgeChaos * px;
 
-  holeDist += chaos;
-  charDist += chaos * 0.55 + charChaos;
+  // A flat, consumed plateau has almost no gradient. Its distance estimate
+  // used to be smaller than the decorative displacement, so noise could flip
+  // an already-open pixel back into sheet and cast orange shadows over bare
+  // ice. Keep the torn detail on the live contour, not throughout the hole.
+  float edgeRelief = 1.0 - smoothstep(CONTOUR + 0.012, CONTOUR + 0.075, burn);
+  float contourRelief = smoothstep(minSlope * 0.5, minSlope * 2.0, length(gradient));
+  holeDist += (chaos + organicChaos + microChaos) * edgeRelief * contourRelief;
+  // Decorative displacement cannot leave an unburnable island in a region
+  // whose material is already consumed. Keep the detail at the actual rim.
+  holeDist = mix(holeDist, max(holeDist, 2.0 * px), smoothstep(0.535, 0.56, burn));
+  charDist += chaos * 0.55 + charChaos + organicChaos * 0.64 + microChaos * 0.72;
 
   // The sheet's image moves with the sheet's shapes; the scene beneath rides the
   // full wind.
   vec3 fire = texture2D(uFire, coverUv(uvSheet, canvasAspect, uFireSize)).rgb;
   vec3 ice = texture2D(uIce, coverUv(uv + uvWind, canvasAspect, uIceSize)).rgb;
 
-  // Sheet presence — one pixel of softening only, so the rim reads as torn.
-  // Spent patches that have not fully knitted shut stay open: a half-healed
-  // dome dropping under the contour otherwise flashes as ash islands over ice
-  // whenever the cursor keeps heat in an already cleared hole.
   float sheet = 1.0 - smoothstep(-0.8 * px, 0.8 * px, holeDist);
-  float spentHold = spent * smoothstep(0.04, 0.18, max(burn, charState));
-  sheet *= 1.0 - spentHold;
+  sheet *= 1.0 - smoothstep(0.535, 0.56, burn);
 
   vec3 surface = fire;
 
@@ -621,7 +681,7 @@ void main() {
 
   // Below the sheet: contact shadow from the burnt lip plus a little spill
   // light, so the opening reads as depth rather than a stencil.
-  float lip = 1.0 - smoothstep(0.0, 13.0 * px, holeDist);
+  float lip = (1.0 - smoothstep(0.0, 13.0 * px, holeDist)) * edgeRelief;
   vec3 below = ice;
   below *= mix(1.0, 0.24, lip * lip * 0.96);
   below += vec3(0.88, 0.30, 0.06) * lip * lip * emberLife * 0.48 * flicker;
@@ -689,23 +749,7 @@ void main() {
       * smoothstep(0.0, 0.30, prog) * (1.0 - smoothstep(0.58, 1.0, prog));
     quench += frost * puff * 0.80;
 
-    // Cold → flame. A short inhale gathers at the eye, then the frost is blown
-    // out on a shock of embers that tears into streaks and spends itself.
-    float charge = smoothstep(0.0, 0.20, prog);
-    float blow = smoothstep(0.16, 1.0, prog);
-    float spend = 1.0 - smoothstep(0.50, 1.0, prog);
-    float flash = exp(-(pd * pd) / (0.011 * 0.011)) * (1.0 - smoothstep(0.06, 0.40, prog));
-    float ignite = exp(-(pd * pd) / (0.026 * 0.026)) * charge * (1.0 - 0.50 * blow);
-    float shockR = (0.014 + 0.150 * blow) * (0.72 + 0.56 * lobe);
-    float shockW = 0.011 + 0.026 * blow;
-    float st = (pd - shockR) / shockW;
-    float shock = exp(-st * st) * spend;
-    float sparks = shock * smoothstep(0.52, 0.90, grain + 0.20 * lobe);
-    vec3 burst = hot * (flash * 2.4 + ignite * 1.6 + shock * 0.85)
-      + vec3(1.0, 0.80, 0.45) * sparks * 1.7
-      // The frost being displaced flares blue-white at the front for an instant.
-      + frost * shock * (1.0 - blow) * 0.65;
-
+${REIGNITE_GLSL}
     // The chill left in the front's wake, so the presence does not have to
     // arrive out of nothing.
     float chilled = (1.0 - smoothstep(0.15, 0.24, pd))

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Elyxee" />
+    <title>Burn complete scene regression</title>
+    <link rel="icon" href="data:," />
+    <link rel="preload" as="image" href="../Assets/background/Fire-clean.png" />
+    <link rel="preload" as="font" href="../Assets/Font/narri-regular.woff2" type="font/woff2" crossorigin />
+    <link rel="preload" as="font" href="../Assets/Font/Gabriela-Regular.ttf" type="font/ttf" crossorigin />
+    <link rel="stylesheet" href="../styles.css?v=85" />
+    <link rel="stylesheet" href="../components/cursor/cursor.css?v=38" />
+  </head>
+
+  <body>
+    <canvas id="cursor-fx" aria-hidden="true"></canvas>
+    <div class="cursor-touch-note" aria-hidden="true">
+      This experience responds to a mouse or trackpad.
+    </div>
+
+    <main class="burn-content" aria-label="Elyxee burn scene">
+      <header class="burn-mark" aria-label="Elyxee">
+        <div class="burn-mark__name" data-inscription-line>Elyxee</div>
+        <div class="burn-mark__copyright" data-inscription-line>// Copyright&nbsp; © 2027</div>
+        <p class="burn-mark__motto"><span data-inscription-line>Ju Yi</span><span data-inscription-line>The Best Ever. ✞</span><span class="burn-mark__hebrew" data-inscription-line dir="rtl" lang="he">אַל־תִּירָא</span></p>
+      </header>
+
+      <div class="burn-socials" role="group" aria-label="Social media">
+        <img class="burn-social" data-inscription-icon src="../Assets/Elements/Snapchat.png" alt="Snapchat" width="32" height="32" />
+        <img class="burn-social" data-inscription-icon src="../Assets/Elements/Instagram.png" alt="Instagram" width="32" height="32" />
+        <img class="burn-social" data-inscription-icon src="../Assets/Elements/X.png" alt="X" width="32" height="32" />
+        <img class="burn-social" data-inscription-icon src="../Assets/Elements/Wechat.png" alt="Wechat" width="32" height="32" />
+        <img class="burn-social" data-inscription-icon src="../Assets/Elements/Weibo.png" alt="Weibo" width="32" height="32" />
+        <img class="burn-social" data-inscription-icon src="../Assets/Elements/Bilibili.png" alt="Bilibili" width="32" height="32" />
+      </div>
+    </main>
+
+    <script type="module">
+      import { initBurn } from "../components/burn/index.js?v=83";
+      import { initCursor } from "../components/cursor/index.js?v=42";
+      import { initBurnTypography } from "../components/burn/type/typography.js?v=74";
+      const params = new URLSearchParams(location.search);
+      const reviewing = params.has('review');
+      const burn = initBurn({ autoPointer: !reviewing, settings: params.has("originalSpeed") || reviewing ? {} : { recoverySeconds: 5, recoveryHoldSeconds: 0.5 } });
+      const checkpoints = params.has('late') ? [0.15,0.10,0.025] : [0.50, 0.30, 0.15, 0.10, 0.025];
+      let checkpoint = 0, paused = false;
+      if (reviewing) {
+        const next = document.createElement('button');
+        next.textContent = 'Continue recovery';
+        next.style.cssText = 'position:fixed;right:20px;top:20px;z-index:10002';
+        next.onclick = () => { paused = false; checkpoint++; burn.resume(); };
+        document.body.appendChild(next);
+        setTimeout(() => { burn.setPointer(innerWidth * 0.5, innerHeight * 0.5); burn.setPointerActive(true); }, 500);
+        if(params.has('trail')) {
+          [[.3,.25],[.65,.2],[.8,.6],[.35,.7]].forEach(([x,y],i)=>setTimeout(()=>{
+            if(burn.getState().phase==='burning')burn.setPointer(innerWidth*x,innerHeight*y);
+          },2500+i*1800));
+        }
+      }
+      const status = document.createElement('pre');
+      status.style.cssText = 'position:fixed;bottom:0;left:12px;z-index:10001;color:white;background:#111c;padding:8px;font:12px monospace;pointer-events:none';
+      document.body.appendChild(status);
+      let history = [], previous = '';
+      setInterval(() => {
+        const s = burn.getState();
+        if (reviewing && !paused && s.phase === 'recovering' && s.damageMean < checkpoints[checkpoint]) {
+          burn.pause(); paused = true;
+          const box = document.querySelector('.burn-mark__name').getBoundingClientRect();
+          const x=box.right+55, y=box.top+box.height*.45;
+          document.dispatchEvent(new PointerEvent('pointermove', {clientX:x, clientY:y, pointerType:'mouse'}));
+          burn.setPointer(x,y);
+          // Let the scene read the same nearby pointer as the lettering before
+          // freezing the visual checkpoint. This never changes production.
+          burn.resume();
+          requestAnimationFrame(() => requestAnimationFrame(() => burn.pause()));
+        }
+        if (s.phase !== previous) { history.push(`${s.phase}: burned ${(s.coverage*100).toFixed(1)}%, restored ${(s.recovery*100).toFixed(1)}%`); previous=s.phase; }
+        status.textContent = history.join('\n') + `\nNow: burned ${(s.coverage*100).toFixed(1)}%, restored ${(s.recovery*100).toFixed(1)}%, idle hold ${s.recoveryHoldRemaining.toFixed(1)}s, damage ${s.damageMean.toFixed(3)}, heat ${s.heatMax.toFixed(3)}, ${paused ? "PAUSED for visual review" : "running"}`;
+      }, 250);
+      initBurnTypography({ settings: burn.settings });
+      initBurnTypography({ settings: burn.settings, selector: ".burn-socials", artwork: true });
+      initCursor();
+    </script>
+  </body>
+</html>

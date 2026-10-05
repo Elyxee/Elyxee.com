@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050403" />
+    <meta name="description" content="About Elyxee." />
+    <title>About — Elyxee</title>
+    <link rel="icon" href="data:," />
+    <link rel="preload" as="font" href="Assets/Font/narri-regular.woff2" type="font/woff2" crossorigin />
+    <link rel="preload" as="font" href="Assets/Font/Gabriela-Regular.ttf" type="font/ttf" crossorigin />
+    <link rel="preload" as="image" href="Assets/About/reading-book-repaired.png" />
+    <link rel="stylesheet" href="components/about/about.css?v=2" />
+    <link rel="stylesheet" href="components/site/page-passage.css?v=2" />
+    <script>
+      // Direct links join the same live scene shell as the Home navigation.
+      const destination = new URL('./', location.href);
+      destination.searchParams.set('view', 'about');
+      location.replace(destination.href);
+    </script>
+    <style>html { background: #050403; } body { margin: 0; }</style>
+  </head>
+  <body>
+    <main id="about-root"></main>
+    <noscript><p style="color: #eee; padding: 3rem">About Elyxee. Contact <a href="mailto:Eliyah@elyxee.com">Eliyah@elyxee.com</a>.</p></noscript>
+    <script type="module" src="components/about/index.js?v=3"></script>
+  </body>
+</html>

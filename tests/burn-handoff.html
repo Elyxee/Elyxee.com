@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Burn recovery handoff continuity</title>
+<style>body{margin:0;background:#111;color:#eee}pre{position:fixed;z-index:10;left:12px;bottom:12px;background:#111e;padding:12px;font:13px monospace;white-space:pre-wrap}</style>
+<pre role="status">Checking actual rendered frames…</pre>
+<script type="module">
+import { initBurn } from '../components/burn/index.js?v=77';
+const out=document.querySelector('pre');
+const moving=new URLSearchParams(location.search).has('move');
+const burn=initBurn({autoPointer:false,settings:{radius:8,recoverySeconds:10,recoveryHoldSeconds:.3}});
+burn.setPointer(innerWidth*.5,innerHeight*.5);burn.setPointerActive(true);
+let previous=null,previousPhase='',switched=false,partialBlend=false,complete=false;
+let deltaAtHandoff=0,normalDelta=0,tailFrames=0,previousWeight=1;
+const checks=[];
+const started=performance.now();
+function check(ok,message){if(!ok)throw Error(message);checks.push('PASS '+message);out.textContent=checks.join('\n');}
+function frame(){
+  if(complete)return;
+  try{
+    if(performance.now()-started>30000)throw Error('Handoff failed to finish');
+    const s=burn.getState();
+    // A corner outside the cursor pulse isolates the background from the
+    // deliberate local reignition burst. Read after the actual draw each RAF.
+    const pixels=new Uint8Array(48*48*4);
+    burn.gl.readPixels(8,8,48,48,burn.gl.RGBA,burn.gl.UNSIGNED_BYTE,pixels);
+    let delta=0;
+    if(previous){for(let i=0;i<pixels.length;i+=4)for(let k=0;k<3;k++)delta+=Math.abs(pixels[i+k]-previous[i+k]);delta/=48*48*3;}
+    if(previousPhase==='recovering'&&s.phase==='pinpoint'){
+      switched=true;deltaAtHandoff=delta;
+      check(s.recoveryVisualMix===1,'Cursor handoff retains the same recovery renderer');
+      check(delta<=Math.max(3,normalDelta*2),`No background flash on handoff (${delta.toFixed(3)}/255 average change)`);
+      check(s.damageMean>0,'Remaining damage is still present after the cursor returns');
+      if(moving){burn.settings.radius=.05;burn.setPointer(innerWidth*.75,innerHeight*.5);}
+    }else if(s.phase==='recovering'&&s.damageMean<.2){normalDelta=Math.max(normalDelta,delta);}
+    if(switched){
+      if(s.recoveryVisualMix>0&&s.recoveryVisualMix<1)partialBlend=true;
+      if(s.recoveryVisualMix===1)tailFrames++;
+      checkWeight(s.recoveryVisualMix);
+      if(s.recoveryVisualMix===0){
+        check(partialBlend,'Renderer handoff includes intermediate blended frames');
+        if(moving)check(s.sourceEnabled,'Fresh pointer movement burns immediately while the handoff blends');
+        else{check(tailFrames>2,'Background keeps recovering across frames after cursor handoff');check(s.damageMax<=.02,'Natural tail finishes before releasing the recovery renderer');}
+        check(burn.gl.getError()===burn.gl.NO_ERROR,'Transition leaves WebGL in a valid state');
+        complete=true;burn.pause();out.dataset.result='pass';out.textContent='ALL CHECKS PASSED ('+(moving?'moving':'stationary')+')\n'+checks.join('\n');return;
+      }
+    }
+    previous=pixels;previousPhase=s.phase;
+    requestAnimationFrame(frame);
+  }catch(error){complete=true;burn.pause();out.dataset.result='fail';out.textContent=checks.join('\n')+'\nFAIL '+error.message;}
+}
+function checkWeight(weight){if(weight>previousWeight+.0001)throw Error('Transition reverses direction');previousWeight=weight;}
+requestAnimationFrame(frame);
+</script>
