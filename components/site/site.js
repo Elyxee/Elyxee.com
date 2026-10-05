@@ -284,7 +284,7 @@ async function prepareDestination(destination) {
 }
 
 aboutPassage = createAboutPassage({
-  link: document.querySelector('.burn-nav a[href="about.html"]'),
+  link: document.querySelector('.burn-nav a[href="#about"]'),
   prepareDestination,
   canNavigate: () => inputEnabled,
   onOwnershipChange(active) {

@@ -8,3 +8,7 @@ node_modules
 .gitignore
 .assetsignore
 wrangler.jsonc
+README.md
+docs
+tests
+scripts
