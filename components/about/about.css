@@ -105,7 +105,11 @@
 @media (min-width: 1800px) { .about-story { padding-top: 35px; } .about-story__grid { padding-top: 75px; } }
 @media (max-width: 900px) {
   .about-hero { min-height: 640px; }
-  .about-hero__person { width: min(100vw, 94svh); top: 18%; bottom: -18%; }
+  .about-hero__person {
+    width: min(100vw, 94svh); top: 18%; bottom: -18%;
+    /* Include the repaired book edge when fitting intermediate-width windows. */
+    left: min(50%, calc(100% - min(100vw, 94svh) * var(--about-photo-right, .5) - 12px));
+  }
   .about-story__grid { column-gap: 40px; }
   .about-story__paragraphs { font-size: 12px; }
   .about-contact { gap: 14px; }
