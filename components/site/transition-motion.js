@@ -62,7 +62,13 @@ export function createTransitionMotion({ travel = 620 } = {}) {
       if (now - lastInputAt > 160) peak = 0;
       lastInputAt = now;
     },
-    goTo(to, { omega = 7.5 } = {}) { complete(to, 'navigation'); completion.omega = omega; },
+    goTo(to, { omega = 7.5, durationMs = 0, now } = {}) {
+      complete(to, 'navigation');
+      completion.omega = omega;
+      if (durationMs > 0) Object.assign(completion, {
+        from: position, durationMs, startedAt: now ?? performance.now(),
+      });
+    },
     update(now, elapsed, reduced = false, visibleShare = position) {
       const idle = now - lastInputAt;
       if (!completion && !held && demand > 0 && demand < 1) {
@@ -74,6 +80,16 @@ export function createTransitionMotion({ travel = 620 } = {}) {
           const to = idleDestination(demand, idle, false, visibleShare);
           if (to !== null) complete(to, 'idle');
         }
+      }
+      // Opt-in navigation timeline: the same 3.2s smoothstep used by About.
+      // Scroll/drag still interrupt via interrupt() and resume the same spring.
+      if (completion?.durationMs && !reduced) {
+        const t = clamp((now - completion.startedAt) / completion.durationMs);
+        const distance = demand - completion.from;
+        position = completion.from + distance * t * t * (3 - 2 * t);
+        velocity = distance * 6 * t * (1 - t) * 1000 / completion.durationMs;
+        if (t === 1) { position = demand; velocity = 0; completion = null; }
+        return position;
       }
       if (reduced) { position = demand; velocity = 0; }
       else {

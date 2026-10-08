@@ -6,7 +6,7 @@
 // single stage progress value (0 = burn, 1 = portrait) from scroll input, and
 // reveals the arriving layer behind one continuous, rising fire front.
 
-import { createAboutPassage } from "./page-passage.js?v=5";
+import { createAboutPassage } from "./page-passage.js?v=6";
 import { initBurn } from "../burn/index.js?v=84";
 import { initCursor } from "../cursor/index.js?v=42";
 import { initBurnTypography } from "../burn/type/typography.js?v=80";
@@ -16,7 +16,7 @@ import { createFireCurtain, edgeHeightAt, FIRE_EDGE } from "./fire-curtain.js?v=
 import { waitForOpening } from "./opening-ready.js";
 import { createCursorHandoff } from "./cursor-handoff.js?v=4";
 import { createDepthLens } from "./depth-lens.js?v=3";
-import { createTransitionMotion } from "./transition-motion.js?v=4";
+import { createTransitionMotion } from "./transition-motion.js?v=5";
 import { portraitClip, portraitShare } from "./transition-front.js?v=2";
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -381,7 +381,9 @@ document.querySelector('.burn-nav')?.addEventListener('click', event => {
   const link = event.target.closest('[data-burn-destination]');
   if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
-  goTo(Number(link.dataset.burnDestination), { omega: 2.7 });
+  const destination = Number(link.dataset.burnDestination);
+  // Only Home's Portfolio click adopts About's deliberate, symmetric timing.
+  goTo(destination, destination === 1 ? { durationMs: 3200 } : { omega: 2.7 });
 });
 
 window.addEventListener("keydown", event => {

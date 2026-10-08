@@ -123,3 +123,44 @@ test('fully exposed scenery still settles unfinished input to its true endpoint'
     assert.equal(m.position, endpoint);
   }
 });
+
+test('Portfolio click matches About at every point of its 3.2-second timeline', () => {
+  for (const hz of [30, 60, 120]) {
+    const m = createTransitionMotion();
+    m.goTo(1, { durationMs: 3200, now: 0 });
+    for (let now = 0; now < 3200; now += 1000 / hz) {
+      const t = now / 3200;
+      assert.ok(Math.abs(m.update(now, 1 / hz) - t * t * (3 - 2 * t)) < 1e-12);
+    }
+    assert.ok(m.update(3199, 1 / hz) < 1);
+    assert.equal(m.update(3200, 1 / hz), 1);
+    assert.equal(m.velocity, 0);
+    assert.equal(m.destination, null);
+  }
+});
+
+test('a reverse scroll takes over a navigation timeline without jumping', () => {
+  const m = createTransitionMotion();
+  m.goTo(1, { durationMs: 3200, now: 0 });
+  m.update(1000, 1);
+  const position = m.position, velocity = m.velocity;
+  m.scroll(-100, 1010);
+  assert.equal(m.position, position);
+  assert.equal(m.velocity, velocity);
+  assert.equal(m.destination, null);
+  advance(m, 1010, 4000);
+  assert.equal(m.position, 0);
+});
+
+test('return and keyboard navigation retain their existing spring, and reduced motion stays instant', () => {
+  for (const omega of [2.7, 7.5]) {
+    const m = createTransitionMotion();
+    m.goTo(1, { omega });
+    const expected = 1 - (1 + omega * .2) * Math.exp(-omega * .2);
+    assert.ok(Math.abs(m.update(200, .2) - expected) < 1e-12);
+  }
+  const m = createTransitionMotion();
+  m.goTo(1, { durationMs: 3200, now: 0 });
+  assert.equal(m.update(16, .016, true), 1);
+  assert.equal(m.velocity, 0);
+});

@@ -1,6 +1,6 @@
 import { createFireCurtain } from './fire-curtain.js?v=10';
 import { FIRE_EDGE, portraitClip, portraitShare } from './transition-front.js?v=2';
-import { createTransitionMotion } from './transition-motion.js?v=4';
+import { createTransitionMotion } from './transition-motion.js?v=5';
 import { mountAbout } from '../about/mount.js?v=2';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
