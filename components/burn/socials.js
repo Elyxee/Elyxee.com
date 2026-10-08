@@ -5,7 +5,7 @@ export function initBurnSocials() {
   const wechat = row.querySelector('[data-wechat-copy]');
   const wechatIcon = wechat?.querySelector('.burn-social');
   const wechatSrc = wechatIcon?.getAttribute('src');
-  const copiedSrc = 'Assets/Elements/Copy.png';
+  const copiedSrc = 'Assets/optimized/copy.webp';
   // Decoded ahead of time so the swap lands without a blank frame.
   const copiedImage = new Image();
   copiedImage.src = copiedSrc;

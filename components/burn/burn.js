@@ -2,6 +2,7 @@ import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js?v=77"
 
 import { RECOVERY_COMPOSITE_FS, RECOVERY_SETTLE_FS } from "./recovery-visual.js?v=75";
 import { LATER_COMPOSITE_FS } from "./later-visual.js?v=82";
+import { loadImage } from "../shared/load-image.js";
 
 // Every rate is per second so behaviour is frame-rate independent.
 export const BURN_SETTINGS = {
@@ -76,8 +77,10 @@ export const BURN_SETTINGS = {
   dprCap: 2,
 };
 
-const DEFAULT_FIRE = new URL("../../Assets/background/Fire-clean.png", import.meta.url).href;
-const DEFAULT_ICE = new URL("../../Assets/background/Ice.png", import.meta.url).href;
+const DEFAULT_FIRE = new URL("../../Assets/optimized/home-fire.webp", import.meta.url).href;
+const DEFAULT_ICE = new URL("../../Assets/optimized/home-ice.webp", import.meta.url).href;
+const FALLBACK_FIRE = new URL("../../Assets/background/Fire-clean.png", import.meta.url).href;
+const FALLBACK_ICE = new URL("../../Assets/background/Ice.png", import.meta.url).href;
 const STYLE_HREF = new URL("./burn.css?v=44", import.meta.url).href;
 
 const QUAD = new Float32Array([-1, -1, 3, -1, -1, 3]);
@@ -223,16 +226,6 @@ function pickStateFormat(gl, isWebGL2) {
   return { ...BYTE_FORMAT, internalFormat: gl.RGBA, type: gl.UNSIGNED_BYTE };
 }
 
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.decoding = "async";
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`burn: failed to load ${src}`));
-    image.src = src;
-  });
-}
-
 function createImageTexture(gl, image) {
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -289,7 +282,13 @@ export function initBurn(options = {}) {
   }
   if (!gl) {
     console.warn("burn: WebGL unavailable, burn effect disabled");
-    return { canvas, supported: false, destroy() {} };
+    const ready = loadImage(options.fireSrc || DEFAULT_FIRE, {
+      fallbackSrc: options.fireSrc ? undefined : FALLBACK_FIRE,
+    }).then(image => {
+      canvas.style.background = `center / cover no-repeat url("${image.src}")`;
+      canvas.classList.add("is-ready");
+    });
+    return { canvas, ready, supported: false, destroy() {} };
   }
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -480,10 +479,15 @@ export function initBurn(options = {}) {
   const fireSize = [1, 1];
   const iceSize = [1, 1];
   let ready = false;
+  let resolveFirstFrame, rejectFirstFrame;
+  const firstFrame = new Promise((resolve, reject) => {
+    resolveFirstFrame = resolve;
+    rejectFirstFrame = reject;
+  });
 
   Promise.all([
-    loadImage(options.fireSrc || DEFAULT_FIRE),
-    loadImage(options.iceSrc || DEFAULT_ICE),
+    loadImage(options.fireSrc || DEFAULT_FIRE, { fallbackSrc: options.fireSrc ? undefined : FALLBACK_FIRE }),
+    loadImage(options.iceSrc || DEFAULT_ICE, { fallbackSrc: options.iceSrc ? undefined : FALLBACK_ICE }),
   ])
     .then(([fire, ice]) => {
       fireTexture = createImageTexture(gl, fire);
@@ -493,10 +497,10 @@ export function initBurn(options = {}) {
       iceSize[0] = ice.naturalWidth;
       iceSize[1] = ice.naturalHeight;
       ready = true;
-      canvas.classList.add("is-ready");
     })
     .catch((error) => {
       console.warn(error.message);
+      rejectFirstFrame(error);
     });
 
   // --- frame loop ----------------------------------------------------------
@@ -982,7 +986,14 @@ export function initBurn(options = {}) {
       }
     }
 
-    if (ready) composite();
+    if (ready) {
+      composite();
+      if (resolveFirstFrame) {
+        canvas.classList.add("is-ready");
+        resolveFirstFrame();
+        resolveFirstFrame = null;
+      }
+    }
   }
 
   frameHandle = requestAnimationFrame(frame);
@@ -992,6 +1003,7 @@ export function initBurn(options = {}) {
     gl,
     settings,
     supported: true,
+    ready: firstFrame,
 
     /** Last sampled lifecycle state, without an additional GPU readback. */
     getState() {

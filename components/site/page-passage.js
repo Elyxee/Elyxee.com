@@ -1,4 +1,4 @@
-import { createFireCurtain } from './fire-curtain.js?v=9';
+import { createFireCurtain } from './fire-curtain.js?v=10';
 import { FIRE_EDGE, portraitClip, portraitShare } from './transition-front.js?v=2';
 import { createTransitionMotion } from './transition-motion.js?v=4';
 import { mountAbout } from '../about/mount.js?v=2';

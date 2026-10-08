@@ -16,6 +16,7 @@
 
 ```js
 const burn = initBurn({ canvas, fireSrc, iceSrc, settings, autoPointer });
+await burn.ready;         // 图片已解码、上传，且完整首帧已绘制；失败会 reject
 // WebGL 可用时：
 burn.pause();
 burn.resume();
@@ -26,7 +27,7 @@ burn.getState();            // 已采样状态，不额外读取 GPU
 burn.destroy();
 ```
 
-`settings` 合并默认配置；`autoPointer: false` 由宿主供给指针。返回对象还暴露 `canvas / gl / settings / supported`，新模块应避免操作其中的 GL 和内部渲染资源。无 WebGL 时仅保证 `canvas / supported: false / destroy()`，调用生命周期前要判断支持情况。
+`settings` 合并默认配置；`autoPointer: false` 由宿主供给指针。返回对象还暴露 `canvas / gl / settings / supported`，新模块应避免操作其中的 GL 和内部渲染资源。无 WebGL 时仅保证 `canvas / ready / supported: false / destroy()`，其中 `ready` 等静态背景完成解码；调用生命周期前要判断支持情况。协调层等待 `ready`，不要再用计时器或 DOM 类名猜测是否加载完。
 
 ### Portfolio / Portrait
 

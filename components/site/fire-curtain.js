@@ -1,4 +1,5 @@
 import { createOpeningGeometry } from './opening-geometry.js?v=4';
+import { loadImage } from '../shared/load-image.js';
 
 import { FIRE_EDGE, FRONT_GLSL } from './transition-front.js?v=2';
 export { FIRE_EDGE, edgeHeightAt } from './transition-front.js?v=2';
@@ -204,10 +205,22 @@ export function createFireCurtain({dprCap=1.25}={}) {
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return tex;}
   const fuelTexture=texture(0);texture(1,createOpeningGeometry());
   gl.uniform1i(uniforms.uFuel,0);gl.uniform1i(uniforms.uGeometry,1);
-  let textureReady=0,destroyed=false;
-  const ready=new Promise(resolve=>{
-    const source=new Image();source.onload=()=>{if(!destroyed){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,fuelTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);textureReady=1;}resolve();};
-    source.onerror=()=>resolve();source.src=new URL('../../Assets/Transitions/combustion-cloud.png',import.meta.url).href;
+  let textureReady=0,destroyed=false,fullTextureReady=false;
+  function upload(source){
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,fuelTexture);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);textureReady=1;
+  }
+  // The same artwork supplies an early preview while the full-resolution,
+  // pixel-identical texture is in flight. A late preview never replaces it.
+  loadImage(new URL('../../Assets/optimized/combustion-preview.webp',import.meta.url).href,
+    {fetchPriority:'high'}).then(source=>{
+      if(!destroyed&&!fullTextureReady)upload(source);
+    }).catch(()=>{});
+  const ready=loadImage(new URL('../../Assets/optimized/combustion.webp',import.meta.url).href,{
+    fallbackSrc:new URL('../../Assets/Transitions/combustion-cloud.png',import.meta.url).href,
+    fetchPriority:'high',
+  }).then(source=>{
+    if(!destroyed){upload(source);fullTextureReady=true;}
   });
   let width=1,height=1;
   function resize(){const dpr=Math.min(devicePixelRatio||1,dprCap);width=Math.max(1,Math.round(innerWidth*dpr));height=Math.max(1,Math.round(innerHeight*dpr));canvas.width=width;canvas.height=height;gl.viewport(0,0,width,height);}

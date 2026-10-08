@@ -1,0 +1,145 @@
+[
+  {
+    "source": "Assets/background/Fire-clean.png",
+    "output": "Assets/optimized/home-fire.webp",
+    "sourceBytes": 5752106,
+    "bytes": 3922240,
+    "size": [
+      1920,
+      1080
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/background/Ice.png",
+    "output": "Assets/optimized/home-ice.webp",
+    "sourceBytes": 5530560,
+    "bytes": 4393950,
+    "size": [
+      2048,
+      1152
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Transitions/combustion-cloud.png",
+    "output": "Assets/optimized/combustion.webp",
+    "sourceBytes": 3119417,
+    "bytes": 2410624,
+    "size": [
+      1672,
+      941
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Elements/Snapchat.png",
+    "output": "Assets/optimized/snapchat.webp",
+    "sourceBytes": 2277226,
+    "bytes": 89064,
+    "size": [
+      256,
+      256
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Elements/Instagram.png",
+    "output": "Assets/optimized/instagram.webp",
+    "sourceBytes": 2303730,
+    "bytes": 82850,
+    "size": [
+      256,
+      256
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Elements/X.png",
+    "output": "Assets/optimized/x.webp",
+    "sourceBytes": 1665598,
+    "bytes": 62474,
+    "size": [
+      256,
+      256
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Elements/Wechat.png",
+    "output": "Assets/optimized/wechat.webp",
+    "sourceBytes": 2352704,
+    "bytes": 91558,
+    "size": [
+      256,
+      256
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Elements/Weibo.png",
+    "output": "Assets/optimized/weibo.webp",
+    "sourceBytes": 2101518,
+    "bytes": 88682,
+    "size": [
+      256,
+      256
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Elements/Bilibili.png",
+    "output": "Assets/optimized/bilibili.webp",
+    "sourceBytes": 2311537,
+    "bytes": 96874,
+    "size": [
+      256,
+      256
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Elements/Copy.png",
+    "output": "Assets/optimized/copy.webp",
+    "sourceBytes": 107222,
+    "bytes": 78782,
+    "size": [
+      256,
+      256
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Transitions/combustion-cloud.png",
+    "output": "Assets/optimized/combustion-preview.webp",
+    "sourceBytes": 3119417,
+    "bytes": 138038,
+    "size": [
+      384,
+      216
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Elements/Favicon #1.PNG",
+    "output": "Assets/optimized/favicon-64.png",
+    "sourceBytes": 6925639,
+    "bytes": 9798,
+    "size": [
+      64,
+      64
+    ],
+    "fullResolutionLossless": false
+  },
+  {
+    "source": "Assets/Elements/Favicon #1.PNG",
+    "output": "Assets/optimized/apple-touch-icon.png",
+    "sourceBytes": 6925639,
+    "bytes": 50986,
+    "size": [
+      180,
+      180
+    ],
+    "fullResolutionLossless": false
+  }
+]

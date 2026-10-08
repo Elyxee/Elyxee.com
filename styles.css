@@ -5,7 +5,7 @@
   --ink: #f0ebe3;
   /* Matches the burn shader's cover crop so the CSS underlay and WebGL
      first frame read as one surface. */
-  --fire: url("Assets/background/Fire-clean.png");
+  --fire: url("Assets/optimized/home-fire.webp");
 }
 
 * {

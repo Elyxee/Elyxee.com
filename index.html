@@ -6,15 +6,18 @@
     <meta name="theme-color" content="#050403" />
     <meta name="description" content="Elyxee" />
     <title>Elyxee</title>
-    <link rel="icon" type="image/png" href="Assets/Elements/Favicon%20%231.PNG" />
-    <link rel="preload" as="image" href="Assets/background/Fire-clean.png" />
-    <link rel="preload" as="image" href="Assets/Transitions/combustion-cloud.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="Assets/optimized/favicon-64.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="Assets/optimized/apple-touch-icon.png" />
+    <link rel="preload" as="image" href="Assets/optimized/combustion-preview.webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="Assets/optimized/combustion.webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="Assets/optimized/home-fire.webp" />
+    <link rel="preload" as="image" href="Assets/optimized/home-ice.webp" />
     <link rel="preload" as="font" href="Assets/Font/narri-regular.woff2" type="font/woff2" crossorigin />
     <link rel="preload" as="font" href="Assets/Font/Gabriela-Regular.ttf" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="styles.css?v=87" />
+    <link rel="stylesheet" href="styles.css?v=88" />
     <link rel="stylesheet" href="components/cursor/cursor.css?v=38" />
-    <link rel="stylesheet" href="components/portrait/portrait.css?v=7" />
-    <link rel="stylesheet" href="components/site/site.css?v=8" />
+    <link rel="stylesheet" href="components/portrait/portrait.css?v=8" />
+    <link rel="stylesheet" href="components/site/site.css?v=9" />
     <link rel="stylesheet" href="components/about/about.css?v=3" />
     <link rel="stylesheet" href="components/site/page-passage.css?v=2" />
   </head>
@@ -41,22 +44,22 @@
 
       <nav class="burn-socials" aria-label="Social media">
         <a class="social-control" href="https://www.snapchat.com/@elyxee33" target="_blank" rel="noopener noreferrer" aria-label="Snapchat（新标签页）">
-          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Snapchat.png" alt="" width="32" height="32" />
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/optimized/snapchat.webp" alt="" width="32" height="32" />
         </a>
         <a class="social-control" href="https://www.instagram.com/elyxeedotfaith" target="_blank" rel="noopener noreferrer" aria-label="Instagram（新标签页）">
-          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Instagram.png" alt="" width="32" height="32" />
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/optimized/instagram.webp" alt="" width="32" height="32" />
         </a>
         <a class="social-control" href="https://x.com/elyxeedotfaith" target="_blank" rel="noopener noreferrer" aria-label="X（新标签页）">
-          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/X.png" alt="" width="32" height="32" />
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/optimized/x.webp" alt="" width="32" height="32" />
         </a>
         <button class="social-control" type="button" data-wechat-copy data-wechat-id="WEWHOWRESTLEWITHGOD_" aria-label="WeChat：复制微信号 WEWHOWRESTLEWITHGOD_">
-          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Wechat.png" alt="" width="32" height="32" />
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/optimized/wechat.webp" alt="" width="32" height="32" />
         </button>
         <a class="social-control" href="https://weibo.com/u/7785598560" target="_blank" rel="noopener noreferrer" aria-label="Weibo（新标签页）">
-          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Weibo.png" alt="" width="32" height="32" />
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/optimized/weibo.webp" alt="" width="32" height="32" />
         </a>
         <a class="social-control" href="https://space.bilibili.com/3546628216588646" target="_blank" rel="noopener noreferrer" aria-label="Bilibili（新标签页）">
-          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/Elements/Bilibili.png" alt="" width="32" height="32" />
+          <img class="burn-social" data-inscription-icon draggable="false" src="Assets/optimized/bilibili.webp" alt="" width="32" height="32" />
         </a>
         <span class="social-status" role="status" aria-live="polite"></span>
       </nav>
@@ -72,8 +75,8 @@
       <main class="portrait" aria-label="Elyxee，移动鼠标探索另一面的肖像">
         <div class="portrait__fallback" aria-hidden="true">
           <div class="portrait__composition">
-            <img class="portrait__head portrait__head--veiled" src="Assets/Portrait/veiled.png" alt="" />
-            <img class="portrait__head portrait__head--crowned" src="Assets/Portrait/crowned.png" alt="" />
+            <img class="portrait__head portrait__head--veiled" src="Assets/Portrait/veiled.png" fetchpriority="low" decoding="async" alt="" />
+            <img class="portrait__head portrait__head--crowned" src="Assets/Portrait/crowned.png" fetchpriority="low" decoding="async" alt="" />
           </div>
         </div>
         <canvas id="portrait-fx" aria-hidden="true"></canvas>
@@ -84,6 +87,6 @@
       </main>
     </div>
 
-    <script type="module" src="components/site/site.js?v=21"></script>
+    <script type="module" src="components/site/site.js?v=22"></script>
   </body>
 </html>

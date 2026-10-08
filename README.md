@@ -32,7 +32,7 @@ wrangler.jsonc         现有 Cloudflare 静态站点配置
 
 组件文件夹里的 `index.js` 是 JS 导出入口，不是另一个网站版本。运行中的素材和组件路径保留，避免整理引入视觉或加载变化。开发文档、测试和脚本已从静态资源发布范围排除；本次没有发布上线。
 
-Favicon 使用你指定的 `Assets/Elements/Favicon #1.PNG`，保留原图。HTML 中的空格和 `#` 已编码为 `%20` 和 `%23`。
+Favicon 从你指定的 `Assets/Elements/Favicon #1.PNG` 导出为 `Assets/optimized/favicon-64.png`，保留原图。`Assets/optimized/` 只放网页交付用的压缩素材；生成方式、原图对应关系及加载验证见 [loading.md](docs/loading.md)。
 
 ## 后续维护
 

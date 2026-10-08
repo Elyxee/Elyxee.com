@@ -6,13 +6,14 @@
 // single stage progress value (0 = burn, 1 = portrait) from scroll input, and
 // reveals the arriving layer behind one continuous, rising fire front.
 
-import { createAboutPassage } from "./page-passage.js?v=4";
-import { initBurn } from "../burn/index.js?v=83";
+import { createAboutPassage } from "./page-passage.js?v=5";
+import { initBurn } from "../burn/index.js?v=84";
 import { initCursor } from "../cursor/index.js?v=42";
 import { initBurnTypography } from "../burn/type/typography.js?v=80";
-import { initBurnSocials } from "../burn/socials.js?v=82";
+import { initBurnSocials } from "../burn/socials.js?v=83";
 import { mountPortrait } from "../portrait/mount.js?v=8";
-import { createFireCurtain, edgeHeightAt, FIRE_EDGE } from "./fire-curtain.js?v=9";
+import { createFireCurtain, edgeHeightAt, FIRE_EDGE } from "./fire-curtain.js?v=10";
+import { waitForOpening } from "./opening-ready.js";
 import { createCursorHandoff } from "./cursor-handoff.js?v=4";
 import { createDepthLens } from "./depth-lens.js?v=3";
 import { createTransitionMotion } from "./transition-motion.js?v=4";
@@ -23,7 +24,6 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const ease = t => t * t * (3 - 2 * t);
 const easeInOut = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const smoothstep = (a, b, x) => ease(clamp((x - a) / (b - a), 0, 1));
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const STAGE = Object.freeze({
   // Slow scrubbing spans this distance; a purposeful flick carries onward.
@@ -36,7 +36,6 @@ const STAGE = Object.freeze({
   // Opening: apparition, minimum hold, then the source-aligned landscape reveal.
   igniteSeconds: 0.7,
   minIntroMs: 1500,
-  maxIntroMs: 7000,
   recedeSeconds: 2.4,
 });
 
@@ -67,7 +66,8 @@ document.addEventListener("pointermove", event => {
     handoff.setPointer(event.clientX, event.clientY);
     pointerType = event.pointerType;
   }
-  if (portraitShown || aboutPassage?.active) event.stopImmediatePropagation();
+  // A slow opening must not accumulate invisible burns before Home is ready.
+  if (html.dataset.stage === 'intro' || portraitShown || aboutPassage?.active) event.stopImmediatePropagation();
 });
 
 // --- fire curtain and opening ----------------------------------------------
@@ -97,16 +97,13 @@ const inscriptions = [
 Promise.allSettled(inscriptions).then(() => depth.mountInscriptions());
 initCursor();
 
-const burnReady = new Promise(resolve => {
-  if (!burn.supported) { resolve(); return; }
-  const check = () => (burn.canvas.classList.contains("is-ready") ? resolve() : requestAnimationFrame(check));
-  check();
+const everythingReady = waitForOpening({
+  scene: burn.ready,
+  curtain: curtain.ready,
+  decorations: inscriptions,
+  fonts: document.fonts.ready,
+  minimumMs: STAGE.minIntroMs,
 });
-const startedAt = performance.now();
-const everythingReady = Promise.race([
-  Promise.all([burnReady, curtain.ready, Promise.allSettled(inscriptions), document.fonts.ready]),
-  sleep(STAGE.maxIntroMs),
-]).then(() => sleep(Math.max(0, STAGE.minIntroMs - (performance.now() - startedAt))));
 
 // --- stage state -------------------------------------------------------------
 let p = 0;          // where the input has put us
@@ -301,6 +298,16 @@ aboutPassage = createAboutPassage({
 
 everythingReady.then(() => {
   if (intro) intro.phase = "recede";
+}).catch(error => {
+  // A failed request is not a ready scene. Keep the opening covering Home and
+  // offer recovery only on an actual load error, never on a slow connection.
+  console.error('Opening assets:', error);
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'site-load-retry';
+  retry.textContent = 'Loading interrupted · Retry';
+  retry.addEventListener('click', () => location.reload());
+  document.body.append(retry);
 });
 
 // --- input -------------------------------------------------------------------
