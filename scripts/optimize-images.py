@@ -1,7 +1,10 @@
 """Export web delivery assets; keep the original artwork untouched.
 
-Requires Pillow with WebP support. Full-screen textures retain every RGBA pixel.
+Requires Pillow with WebP support. Full-screen textures and the Portfolio /
+About artwork retain every RGBA pixel, including colour under transparency.
 Only small UI icons, the favicon, and the temporary loading preview are resized.
+An existing export that already decodes to the expected pixels is kept as is,
+so re-running the script does not churn unchanged files.
 """
 from pathlib import Path
 from PIL import Image
@@ -20,7 +23,11 @@ def export(source, name, size=None, png=False):
     if size:
         image.thumbnail(size, Image.Resampling.LANCZOS)
     target = OUT / name
-    if png:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    unchanged = target.exists() and Image.open(target).convert('RGBA').tobytes() == image.tobytes()
+    if unchanged:
+        pass
+    elif png:
         image.save(target, 'PNG', optimize=True)
     else:
         image.save(target, 'WEBP', lossless=True, quality=100, method=6, exact=True,
@@ -43,6 +50,24 @@ for source, name in [
 # hover scaling. 256px keeps ample detail for the image fallback and zoom too.
 for name in ['Snapchat', 'Instagram', 'X', 'Wechat', 'Weibo', 'Bilibili', 'Copy']:
     export(f'Assets/Elements/{name}.png', f'{name.lower()}.webp', (256, 256))
+
+# Portfolio artwork, mirrored under Assets/optimized/. Only images whose every
+# use decodes to identical pixels in Chrome: opaque images, and cutouts that go
+# straight into WebGL. Cutouts that are also composited through a 2D canvas (the
+# two heads, frames that receive a mounted cover, the About photo) stay PNG,
+# since Chrome's PNG and WebP decoders round premultiplied edges differently.
+# Files that are already JPEG data stay as they are.
+for source in [
+    'Assets/background/Space.png',
+    'Assets/background/Dust.png',
+    'Assets/Elements/ufo.png',
+    'Assets/Portrait/frames/european.png',
+    'Assets/Portrait/frames/gilded.png',
+    'Assets/Frame/火焰相框.png',
+    *[f'Assets/Portrait/artworks/{name}.png' for name in
+      ['digital-nations', 'longevity', 'equality', 'mental-shackles']],
+]:
+    export(source, source.removeprefix('Assets/').removesuffix('.png') + '.webp')
 
 export('Assets/Transitions/combustion-cloud.png', 'combustion-preview.webp', (384, 216))
 export('Assets/Elements/Favicon #1.PNG', 'favicon-64.png', (64, 64), png=True)

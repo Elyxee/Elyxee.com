@@ -1,12 +1,15 @@
-import { initPortrait } from './portrait.js?v=5';
+import { initPortrait } from './portrait.js?v=6';
 import { FRAME_ITEMS } from './gallery-items.js';
 import { GALLERY_SEQUENCES } from './gallery-sequence.js';
-import { gallerySource } from './artworks.js?v=2';
+import { gallerySource } from './artworks.js?v=3';
 
 // Page bootstrap for the Dust & Space study, shared by portrait.html and the
 // merged site. It only wires the existing DOM (scene switch, static fallback
 // frames) to initPortrait; every effect lives untouched in portrait.js.
 export async function mountPortrait({ root, scene = 1, onHome }) {
+  // The fallback heads stay unrequested until now, leaving the opening's
+  // bandwidth to Home. They are the same files the effect loads below.
+  root.querySelectorAll('img[data-src]').forEach(image => { image.src = image.dataset.src; });
   const home = document.createElement('a');
   home.className = 'portrait-home';
   home.href = './index.html';
@@ -86,7 +89,6 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
     image.alt = '';
     image.className = 'portrait__gallery-frame';
     image.dataset.scene = item.scene ? 'space' : 'dust';
-    image.dataset.figmaNode = item.id;
     image.style.width = `${item.size[0]}px`;
     image.style.height = `${item.size[1]}px`;
     image.style.transform = `matrix(${item.matrix.join(',')})`;
@@ -100,7 +102,6 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
       canvas.getContext('2d').drawImage(source, 0, 0);
       canvas.className = image.className;
       canvas.dataset.scene = image.dataset.scene;
-      canvas.dataset.figmaNode = item.id;
       canvas.style.cssText = image.style.cssText;
       image.replaceWith(canvas);
     }).catch(error => console.error('Frame artwork:', error));

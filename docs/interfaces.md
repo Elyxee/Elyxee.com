@@ -43,7 +43,7 @@ portrait.destroy();
 
 `isGalleryScrollRegion` 用于决定手势应移动画框还是切换页面。`onHome` 由宿主处理返回首页；组件不应该自行修改别的场景。WebGL 失败时 `effect` 可能为空，现有静态回退仍可切换 Space / Dust。
 
-现有 Portrait 没有公共 `pause / resume / enter / exit` 方法。当前实现一次挂载后复用，通过宿主状态管理输入；不要写调用不存在的方法的通用适配器。`destroy()` 不是重新挂载整个宿主 DOM 的完整协议，未来如需频繁销毁/重建，应先补充相应的生命周期验证。
+`portrait.effect?.setVisible(visible)` 由宿主在图层完全被遮住时传 `false`：模拟与时钟照常推进，只跳过绘制。现有 Portrait 没有公共 `pause / resume / enter / exit` 方法。当前实现一次挂载后复用，通过宿主状态管理输入；不要写调用不存在的方法的通用适配器。`destroy()` 不是重新挂载整个宿主 DOM 的完整协议，未来如需频繁销毁/重建，应先补充相应的生命周期验证。
 
 画作数据在 `artworks.js` 的 `DUST_ARTWORKS / SPACE_ARTWORKS`，画框数据在 `gallery-items.js`。现有交互是第一次点击选中，再点同一作品打开链接；序列有独立条目 ID。`createGallery` 的 `contentByScene` 接口已存在，但现有封面映射和链接使用 `artworks.js`；它还不是无需接线的 CMS 接口。
 
@@ -61,7 +61,7 @@ portrait.destroy();
 
 `createTransitionMotion({ travel = 620 })` 提供 `scroll / hold / drag / release / goTo / update / ownsTail`，并暴露只读 `position / input / velocity / destination`。`update(now, elapsed, reduced, visibleShare)` 中 `now` 为毫秒，`elapsed` 为秒。点击导航与手势是两种驱动方式，不能为了统一接口把拖动改成固定时长播放。
 
-`createFireCurtain({ dprCap })` 返回 `element / ready / supported / visible / state / set / render / resize / destroy`。宿主用 `set(...)` 传入火线和开场状态，用 `render(time)` 绘制；`time` 为秒。几何与遮罩规则在 `transition-front.js`。这是共享渲染接口，还没有通用的 `transition.play({ from, to })` 场景路由 API。
+`createFireCurtain({ dprCap, opening = true })` 返回 `element / ready / supported / visible / state / set / render / resize / destroy`。宿主用 `set(...)` 传入火线和开场状态，用 `render(time)` 绘制；`time` 为秒。几何与遮罩规则在 `transition-front.js`。不播放开场的火线传 `opening: false`，跳过开场几何与预览纹理。这是共享渲染接口，还没有通用的 `transition.play({ from, to })` 场景路由 API。
 
 `createAboutPassage({ link, prepareDestination, onOwnershipChange, canNavigate })` 提供 `active / settled / preload / open / scrollFromPortrait / dragFromPortrait / syncHomeRoute / destroy`。`prepareDestination` 决定转场下面的目标场景；`onOwnershipChange` 交接输入，不要让两个场景同时响应同一个手势。
 

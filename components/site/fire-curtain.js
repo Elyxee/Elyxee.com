@@ -176,7 +176,9 @@ void main(){
 
 function shader(gl,type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);
 if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
-export function createFireCurtain({dprCap=1.25}={}) {
+// `opening: false` is for curtains that never play the site opening: they skip
+// its reconstructed geometry and the early texture preview.
+export function createFireCurtain({dprCap=1.25,opening=true}={}) {
   const canvas=document.createElement('canvas');canvas.id='stage-fire';canvas.setAttribute('aria-hidden','true');document.body.append(canvas);
   const state={edge:FIRE_EDGE.hidden,mode:0,bias:1,dim:0,life:1,opening:0,reveal:0};
   let visible=false;
@@ -203,7 +205,7 @@ export function createFireCurtain({dprCap=1.25}={}) {
     else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([30,10,3,255]));
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return tex;}
-  const fuelTexture=texture(0);texture(1,createOpeningGeometry());
+  const fuelTexture=texture(0);texture(1,opening?createOpeningGeometry():null);
   gl.uniform1i(uniforms.uFuel,0);gl.uniform1i(uniforms.uGeometry,1);
   let textureReady=0,destroyed=false,fullTextureReady=false;
   function upload(source){
@@ -212,7 +214,7 @@ export function createFireCurtain({dprCap=1.25}={}) {
   }
   // The same artwork supplies an early preview while the full-resolution,
   // pixel-identical texture is in flight. A late preview never replaces it.
-  loadImage(new URL('../../Assets/optimized/combustion-preview.webp',import.meta.url).href,
+  if(opening)loadImage(new URL('../../Assets/optimized/combustion-preview.webp',import.meta.url).href,
     {fetchPriority:'high'}).then(source=>{
       if(!destroyed&&!fullTextureReady)upload(source);
     }).catch(()=>{});

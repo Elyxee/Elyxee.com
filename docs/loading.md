@@ -27,3 +27,38 @@
 - 浏览器强制主纹理下载超过旧 7 秒时限：第 34.2 秒首页首帧完成，第 36.6 秒开场结束，未提前揭开半幅背景；开场纹理预览已正常显示。
 - 人工令优化版 Ice 返回 503：自动请求原始 Ice，完整进入 Home。原图也失败时，保持开场并提供重试。
 - 三张完整纹理浏览器解码结果与原 PNG 的每个 RGBA 像素相同；小图标只做适屏导出，未改变页面样式。
+
+# 运行与加载优化 · 2026-10-10
+
+## 范围
+
+只清理浪费的绘制、同步等待和下载。所有 shader、动画参数、时长、输入手感、分辨率（dprCap）、图层与素材原图保持不变。
+
+## 运行时
+
+- **Home 光标（主要卡顿来源）**：烟雾的 `filter: blur()` 和火星的 `shadowBlur`，Chrome 会在与裁剪区域等大的临时图层里模糊——未裁剪时就是整张 2880×1800 画布，每颗粒子每帧一次。现在每颗粒子先裁剪到自身加模糊范围。逐像素对比：烟雾差异最多 1/255，火星约 0.06% 像素有亚像素差（最大 14/255），粒子本身每次都是随机的。`cursor-handoff.js` 的转场火星同样处理。
+- **看不见时不画**：光标画布被隐藏（Portfolio、About、开场）或在冷态恢复中透明时，只继续模拟、不再绘制。Portfolio 在 Home 下方或 About 上方完全被遮住时，同样只推进状态和水波模拟，跳过全屏合成（`effect.setVisible`）。重新出现的第一帧状态与一直绘制时相同。
+- **燃烧状态采样**：WebGL2 改为像素缓冲 + fence 异步读取，并去掉每次采样后的 `getError()`。Chrome 读取时仍有一次 GPU 进程往返，但每次阻塞从约 90–100 ms 降到约 20 ms；采样间隔和判定逻辑不变。WebGL1 保留原同步读取。
+- **About 预备**：原来在 Home → Portfolio 转场中途创建 About 图层和两个 WebGL 上下文；现在等 Portfolio 到达后空闲时再做，并拆成两个任务。About 自己的火线不再生成只有开场才用的 1920×1080 几何图和预览纹理（`createFireCurtain({ opening: false })`）。
+- 删除无人使用的代码：Burn 每帧测量标题和图标位置并写入四个 CSS 变量（无样式读取）、`data-burn-scene`、`is-recovering`；光标测试页残留的 `#motion-state` / `#test-button` / `body[data-motion]`；`data-figma-node`。
+
+## 加载
+
+- Portfolio 中所有使用路径都逐像素一致的十张图改为无损 WebP，放在 `Assets/optimized/` 下并镜像原路径：Space、Dust、UFO、四张不透明封面，以及不嵌封面的三个画框。Chrome 中 2D Canvas 与 WebGL 两条解码路径都已逐像素核对。
+- 保留 PNG：两张人像（参与光环线条生成，经 2D Canvas 后会有像素差）、六个嵌封面的画框和 About 主图。Chrome 对 PNG / WebP 半透明边缘的预乘取整不同，最多 1/255，但为保证完全一致不替换。另有五个实为 JPEG 数据的 `.png` 原样保留。
+- Portfolio 静态回退里的两张人像（2.4 MB）改为在 Portfolio 挂载时才请求，不再和开场素材抢带宽。
+
+## 验证（Apple M4 Pro，1440×900，DPR 2）
+
+| 场景（真实 Chrome 窗口，120 Hz） | 之前 | 之后 |
+| --- | --- | --- |
+| Home 移动鼠标燃烧 | 30 fps，最长帧 400–500 ms | 111 fps，最长帧 26–33 ms |
+| Home → Portfolio 转场 | 最长帧 290–340 ms | 58–67 ms |
+| Portfolio 静止 / 移动 | 偶有 17 ms 掉帧 | 稳定 120 fps |
+
+| 20 Mbps 模拟网络 | 之前 | 之后 |
+| --- | --- | --- |
+| 进入 Home | 8.4 s（先下载 14.4 MB） | 7.5 s（12.0 MB） |
+| Portfolio 就绪 | 24.1 s | 20.7 s |
+
+逐场景截图对比（Home、燃烧、转场、Space、Dust、About、返回）无可见差异，控制台无错误。57 项测试通过，新增 `tests/site/asset-references.test.mjs` 检查所有素材引用都存在。定档基准 `frozen-files.json` 未更新，需确认效果后再更新。

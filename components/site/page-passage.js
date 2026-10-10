@@ -1,4 +1,4 @@
-import { createFireCurtain } from './fire-curtain.js?v=10';
+import { createFireCurtain } from './fire-curtain.js?v=11';
 import { FIRE_EDGE, portraitClip, portraitShare } from './transition-front.js?v=2';
 import { createTransitionMotion } from './transition-motion.js?v=5';
 import { mountAbout } from '../about/mount.js?v=2';
@@ -43,7 +43,10 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
         return false;
       } });
       page.setActive(false);
-      try { fire = createFireCurtain(); fire.element.id = 'page-passage-fire'; } catch { /* Live-layer fade fallback. */ }
+      // Two separate tasks: each creates a WebGL context, which blocks.
+      await new Promise(resolve => setTimeout(resolve));
+      if (destroyed) return;
+      try { fire = createFireCurtain({ opening: false }); fire.element.id = 'page-passage-fire'; } catch { /* Live-layer fade fallback. */ }
       await Promise.allSettled([
         document.fonts.ready,
         ...[...layer.querySelectorAll('.about-hero__photo img, .about-scene__texture')].map(image => image.decode()),

@@ -26,7 +26,7 @@ export const FRAME_ITEMS = [
     "id": "24:590",
     "order": 9,
     "name": "中世纪鎏金竖",
-    "src": "../../Assets/Portrait/frames/gilded.png",
+    "src": "../../Assets/optimized/Portrait/frames/gilded.webp",
     "scene": 0,
     "material": "gold",
     "size": [
@@ -46,7 +46,7 @@ export const FRAME_ITEMS = [
     "id": "24:591",
     "order": 10,
     "name": "欧式雕花装饰边框",
-    "src": "../../Assets/Portrait/frames/european.png",
+    "src": "../../Assets/optimized/Portrait/frames/european.webp",
     "scene": 0,
     "material": "stone",
     "size": [
@@ -167,7 +167,7 @@ export const FRAME_ITEMS = [
 // The fifth Dust slot sits just upstream of the initial four. Its spacing is
 // part of every repeated arrangement, with no separate delay or return timer.
 FRAME_ITEMS.push({
-  id: 'dust-fire', name: '火焰相框', src: '../../Assets/Frame/火焰相框.png',
+  id: 'dust-fire', name: '火焰相框', src: '../../Assets/optimized/Frame/火焰相框.webp',
   scene: 0, material: 'fire', size: [480, 320],
   matrix: [.970296, .241922, -.241922, .970296, -590, -305],
   initial: false,

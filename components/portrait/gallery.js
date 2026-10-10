@@ -2,7 +2,7 @@ import { FRAME_ITEMS } from './gallery-items.js';
 import { COMPOSITION } from './settings.js';
 import { createGallerySequence } from './gallery-sequence.js';
 import { isNearGalleryFrame, isNearGalleryTrack } from './gallery-region.js';
-import { artworkFor, DUST_ARTWORKS, SPACE_ARTWORKS, loadGalleryImage, mountArtwork } from './artworks.js?v=2';
+import { artworkFor, DUST_ARTWORKS, SPACE_ARTWORKS, loadGalleryImage, mountArtwork } from './artworks.js?v=3';
 import { createGallerySelection } from './gallery-interaction.js';
 
 const VS = `#version 300 es
@@ -168,7 +168,7 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
     return [((d*dx-c*dy)/det)/item.size[0]+.5, ((a*dy-b*dx)/det)/item.size[1]+.5];
   }
 
-  function update(dt, pointer, scale, originX, originY, reduced, transition, scene) {
+  function update(dt, pointer, scale, originX, originY, reduced, transition, scene, draw = true) {
     const view = { width, height, scale, originX, originY };
     for (let targetScene=0; targetScene<2; targetScene++) {
       if (targetScene !== scene && !transition) continue;
@@ -188,8 +188,12 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
         const hot = pointer.active && !occluded && inside ? 1 : 0;
         item.hover += (hot-item.hover)*(1-Math.exp(-dt*7));
         item.pose = poseFor(item,scale,originX,originY);
+        // Textures and hit masks are prepared on the same schedule while
+        // hidden, so input and the first visible frame find them ready.
+        if (!draw) textureFor(item);
       }
     }
+    if (!draw) return;
     gl.useProgram(program); gl.bindVertexArray(vao);
     gl.viewport(0,0,width,height);
     gl.uniform2f(uniforms.uView,width,height);

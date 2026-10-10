@@ -19,7 +19,9 @@ export function createCursorHandoff() {
     },
     update(dt){for(let i=motes.length-1;i>=0;i--){const p=motes[i];p.age+=dt;if(p.age>=p.life){motes.splice(i,1);continue;}p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=Math.exp(-dt*2);}},
     render(){if(!ctx||(!motes.length&&!painted))return;ctx.clearRect(0,0,width,height);painted=motes.length>0;
-      for(const p of motes){const opacity=Math.pow(1-p.age/p.life,1.8)*.65;ctx.fillStyle=`rgba(${p.color},${opacity})`;ctx.shadowColor=`rgba(${p.color},${opacity*.4})`;ctx.shadowBlur=3;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();}ctx.shadowBlur=0;},
+      // Each shadowed grain is clipped to its glow, so Chrome blurs a small
+      // layer instead of one the size of the whole canvas.
+      for(const p of motes){const opacity=Math.pow(1-p.age/p.life,1.8)*.65,reach=p.size+6.5;ctx.save();ctx.beginPath();ctx.rect(p.x-reach,p.y-reach,reach*2,reach*2);ctx.clip();ctx.fillStyle=`rgba(${p.color},${opacity})`;ctx.shadowColor=`rgba(${p.color},${opacity*.4})`;ctx.shadowBlur=3;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();ctx.restore();}ctx.shadowBlur=0;},
     destroy(){window.removeEventListener('resize',resize);canvas.remove();},
   };
 }

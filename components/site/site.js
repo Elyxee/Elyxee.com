@@ -6,15 +6,15 @@
 // single stage progress value (0 = burn, 1 = portrait) from scroll input, and
 // reveals the arriving layer behind one continuous, rising fire front.
 
-import { createAboutPassage } from "./page-passage.js?v=6";
-import { initBurn } from "../burn/index.js?v=84";
-import { initCursor } from "../cursor/index.js?v=42";
+import { createAboutPassage } from "./page-passage.js?v=7";
+import { initBurn } from "../burn/index.js?v=85";
+import { initCursor } from "../cursor/index.js?v=43";
 import { initBurnTypography } from "../burn/type/typography.js?v=80";
 import { initBurnSocials } from "../burn/socials.js?v=83";
-import { mountPortrait } from "../portrait/mount.js?v=8";
-import { createFireCurtain, edgeHeightAt, FIRE_EDGE } from "./fire-curtain.js?v=10";
+import { mountPortrait } from "../portrait/mount.js?v=9";
+import { createFireCurtain, edgeHeightAt, FIRE_EDGE } from "./fire-curtain.js?v=11";
 import { waitForOpening } from "./opening-ready.js";
-import { createCursorHandoff } from "./cursor-handoff.js?v=4";
+import { createCursorHandoff } from "./cursor-handoff.js?v=5";
 import { createDepthLens } from "./depth-lens.js?v=3";
 import { createTransitionMotion } from "./transition-motion.js?v=5";
 import { portraitClip, portraitShare } from "./transition-front.js?v=2";
@@ -115,6 +115,7 @@ let intro = { phase: "hold", t: 0, life: 0 };
 let mode = 0, modeTarget = 0, lastEdge = FIRE_EDGE.full;
 let insideFire = false;
 let burnPaused = false;
+let aboutPreloadQueued = false;
 let portrait = null;
 let portraitView = null;
 let touch = null;   // active touch pull, see input below
@@ -154,7 +155,6 @@ function swapLayers(toPortrait) {
   burnLayer.inert = toPortrait;
   burnLayer.setAttribute("aria-hidden", String(toPortrait));
   if (toPortrait) {
-    aboutPassage?.preload();
     // Input changes owner while both pages can still be visible.
     burn.setPointerActive?.(false);
     // The portrait's own presence starts from the pointer's current place.
@@ -184,6 +184,9 @@ function apply(dt) {
       burnPaused = shouldPause;
       if (shouldPause) burn.pause?.(); else burn.resume?.();
     }
+    // The portrait draws only while some of it is on screen: not under Home,
+    // and not under a settled About page.
+    portraitView?.effect?.setVisible(pv > 0 && !aboutPassage?.settled);
   }
 
   depth.set(intro || reduced.matches ? 0 : 1 - v.burnScale,
@@ -204,6 +207,14 @@ function apply(dt) {
 
   const stage = aboutPassage?.settled ? "about" : intro ? "intro" : pv <= 0.02 ? "burn" : pv >= 0.98 ? "portrait" : "transit";
   if (html.dataset.stage !== stage) html.dataset.stage = stage;
+  // About's layer and its WebGL contexts are prepared once Portfolio has
+  // arrived, so that setup never lands in the middle of the passage.
+  if (stage === "portrait" && !aboutPreloadQueued) {
+    aboutPreloadQueued = true;
+    const preload = () => aboutPassage.preload();
+    if (window.requestIdleCallback) requestIdleCallback(preload, { timeout: 600 });
+    else setTimeout(preload, 200);
+  }
   if (!intro && pv === 0 && !aboutPassage?.active) aboutPassage?.syncHomeRoute();
 
   // Cursor handoff: a few grains leave the real pointer as the smoke passes.

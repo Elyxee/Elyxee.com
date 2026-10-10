@@ -1,8 +1,11 @@
 // Only the seven image fills from Figma's Presentation - Eng (47:1684).
 // Links read from the captions in Presentation - Eng, alongside each cover.
+// Lossless WebP copies of the PNG covers; three covers are JPEG data already.
+const JPEG_COVERS = new Set(['matrix', 'solved', 'portal']);
 const artwork = (id, name, title, video) => ({ id, title,
   url: `https://www.bilibili.com/video/${video}/`,
-  src: new URL(`../../Assets/Portrait/artworks/${name}.png`, import.meta.url).href });
+  src: new URL(JPEG_COVERS.has(name) ? `../../Assets/Portrait/artworks/${name}.png`
+    : `../../Assets/optimized/Portrait/artworks/${name}.webp`, import.meta.url).href });
 export const DUST_ARTWORKS = [
   artwork('50:1716', 'digital-nations', 'Border, Sovereignty & Digital Nations', 'BV1URQ7BFE1e'),
   artwork('50:1715', 'longevity', 'Cancer, Longevity, and Decision-Making in the AI Era', 'BV191Q7BKE8P'),
@@ -89,13 +92,13 @@ export function mountArtwork(frame, image, item) {
   const cx = (left + right) / 2, cy = (top + bottom) / 2;
   // Protect the actual titles and credits, rather than shrinking every
   // cover to clear decorative corners that only overlap its background.
-  const name = new URL(image.src).pathname.split('/').pop();
+  const name = new URL(image.src).pathname.split('/').pop().replace(/\.\w+$/, '');
   const safeAreas = {
-    'digital-nations.png': [[.025, .16, .98, .95]],
-    'longevity.png': [[.025, .16, .98, .94]],
-    'mental-shackles.png': [[.05, .16, .23, .87], [.69, .22, .99, .61]],
-    'equality.png': [[.003, .21, .32, .47], [.70, .20, .997, .46]],
-    'solved.png': [[.055, .12, .62, .62]],
+    'digital-nations': [[.025, .16, .98, .95]],
+    'longevity': [[.025, .16, .98, .94]],
+    'mental-shackles': [[.05, .16, .23, .87], [.69, .22, .99, .61]],
+    'equality': [[.003, .21, .32, .47], [.70, .20, .997, .46]],
+    'solved': [[.055, .12, .62, .62]],
   }[name] ?? [];
   let w = right - left, h = bottom - top;
   const fits = () => safeAreas.every(([u0, v0, u1, v1]) => {

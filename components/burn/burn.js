@@ -343,11 +343,24 @@ export function initBurn(options = {}) {
   let stateB = null;
   let metricsTarget = null;
   let metricsPixels = new Uint8Array(0);
+  // WebGL2 reads the metrics copy into a pixel buffer and collects it once the
+  // GPU has finished, instead of stalling the frame on a synchronous read. Each
+  // sample gets a fresh buffer: Chrome warns about, and discards its readback
+  // copy for, a buffer that is rewritten.
+  let metricsBuffer = null;
+  let metricsFence = null;
   let simWidth = 1;
   let simHeight = 1;
   let viewWidth = 1;
   let viewHeight = 1;
   let pixelScale = 1;
+
+  function dropPendingSample() {
+    if (metricsFence) gl.deleteSync(metricsFence);
+    if (metricsBuffer) gl.deleteBuffer(metricsBuffer);
+    metricsFence = null;
+    metricsBuffer = null;
+  }
 
   function releaseState() {
     for (const target of [stateA, stateB, metricsTarget]) {
@@ -358,6 +371,7 @@ export function initBurn(options = {}) {
     stateA = null;
     stateB = null;
     metricsTarget = null;
+    dropPendingSample();
   }
 
   function clearState() {
@@ -416,11 +430,6 @@ export function initBurn(options = {}) {
     targetActive: 0,
     seen: false,
   };
-
-  const content = document.querySelector(".burn-content");
-  const markNode = content?.querySelector(".burn-mark");
-  const socialFireNode = content?.querySelector(".burn-socials--fire");
-  const socialIceNode = content?.querySelector(".burn-socials--ice");
 
   function setPointer(clientX, clientY) {
     pointer.x = clamp(clientX / Math.max(window.innerWidth, 1), -0.5, 1.5);
@@ -530,14 +539,8 @@ export function initBurn(options = {}) {
   //                that parts the ash but writes nothing to the state.
   // "pinpoint"   — mostly healed once; the pointer burns only where it is.
   let phase = "burning";
-  // The information layer follows the visible material, which can become ice
-  // before the recovery phase formally starts if a large front has crossed it.
-  let sceneIce = false;
   // Smoothed 0..1 weight for the recovery-phase presence in the composite.
   let interact = 0;
-  const probeW = 8;
-  const probeH = 8;
-  const sampleBuf = new Uint8Array(probeW * probeH * 4);
 
   // Phase-change transition at the cursor: 1 at the change, decays to 0. Kind
   // +1 = flame quenched into the cold presence, -1 = cold presence reignites.
@@ -573,11 +576,7 @@ export function initBurn(options = {}) {
   function setPhase(next) {
     const prev = phase;
     phase = next;
-    canvas.classList.toggle("is-recovering", next === "recovering");
     document.documentElement.dataset.burnPhase = next;
-    if (next === "recovering") sceneIce = true;
-    if (next === "pinpoint" && prev === "recovering") sceneIce = false;
-    if (content) content.dataset.burnScene = sceneIce ? "ice" : "fire";
     if (prev !== next) {
       if (next === "recovering") {
         recoveryVisualMix = 1;
@@ -612,37 +611,8 @@ export function initBurn(options = {}) {
   }
   setPhase(phase);
 
-  function readProbe(ox, oy) {
-    for (let y = 0; y < probeH; y++) {
-      for (let x = 0; x < probeW; x++) {
-        const offset = (Math.min(simHeight - 1, oy + y) * simWidth + Math.min(simWidth - 1, ox + x)) * 4;
-        sampleBuf.set(metricsPixels.subarray(offset, offset + 4), (y * probeW + x) * 4);
-      }
-    }
-    return true;
-  }
-
-  function sampleNodeState(node, scale) {
-    if (!node) return { burn: 0, charred: 0, heat: 0 };
-    const rect = node.getBoundingClientRect();
-    const u = clamp((rect.left + rect.width * 0.5) / Math.max(window.innerWidth, 1), 0, 1);
-    const v = clamp(1 - (rect.top + rect.height * 0.5) / Math.max(window.innerHeight, 1), 0, 1);
-    const ox = clamp(Math.round(u * simWidth - probeW / 2), 0, Math.max(0, simWidth - probeW));
-    const oy = clamp(Math.round(v * simHeight - probeH / 2), 0, Math.max(0, simHeight - probeH));
-    if (!readProbe(ox, oy)) return { burn: 0, charred: 0, heat: 0 };
-    let burn = 0;
-    let charred = 0;
-    let heat = 0;
-    for (let i = 0; i < probeW * probeH; i++) {
-      burn = Math.max(burn, sampleBuf[i * 4] * scale);
-      heat = Math.max(heat, sampleBuf[i * 4 + 1] * scale);
-      charred = Math.max(charred, sampleBuf[i * 4 + 2] * scale);
-    }
-    return { burn, charred, heat };
-  }
-
-  function sampleSheetDamage() {
-    if (!stateA) return null;
+  // Copies the state to bytes so float, half and byte GPUs read back alike.
+  function drawMetrics() {
     gl.bindFramebuffer(gl.FRAMEBUFFER, metricsTarget.framebuffer);
     gl.viewport(0, 0, simWidth, simHeight);
     gl.useProgram(metricsProgram.program);
@@ -650,11 +620,40 @@ export function initBurn(options = {}) {
     gl.bindTexture(gl.TEXTURE_2D, stateA.texture);
     gl.uniform1i(metricsProgram.location("uState"), 0);
     drawQuad();
-    gl.readPixels(0, 0, simWidth, simHeight, gl.RGBA, gl.UNSIGNED_BYTE, metricsPixels);
-    if (gl.getError() !== gl.NO_ERROR) {
+  }
+
+  // Starts a sheet sample. WebGL1 reads synchronously and returns the sample;
+  // WebGL2 queues the read and collectSheetSample() picks it up when ready.
+  function requestSheetSample() {
+    if (!stateA) return null;
+    drawMetrics();
+    if (isWebGL2) {
+      metricsBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, metricsBuffer);
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, metricsPixels.byteLength, gl.STREAM_READ);
+      gl.readPixels(0, 0, simWidth, simHeight, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      metricsFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       return null;
     }
+    gl.readPixels(0, 0, simWidth, simHeight, gl.RGBA, gl.UNSIGNED_BYTE, metricsPixels);
+    const failed = gl.getError() !== gl.NO_ERROR;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return failed ? null : summarizeSheet();
+  }
+
+  function collectSheetSample() {
+    if (!metricsFence) return null;
+    if (gl.getSyncParameter(metricsFence, gl.SYNC_STATUS) !== gl.SIGNALED) return null;
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, metricsBuffer);
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, metricsPixels);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    dropPendingSample();
+    return summarizeSheet();
+  }
+
+  function summarizeSheet() {
     let burn = 0, charred = 0, open = 0, restored = 0, heatMax = 0, damageSum = 0, spentSum = 0, burnSum = 0;
     const total = simWidth * simHeight;
     const scale = 1 / 255;
@@ -672,18 +671,6 @@ export function initBurn(options = {}) {
       if (metricsPixels[i] >= 144) open++;
       if (Math.max(b, c) <= settings.reigniteDamage) restored++;
     }
-
-    // The information layer is sampled from the same state texture as the
-    // composite. This lets the mark and icons pick up heat, ash and frost when
-    // the cursor burns directly beneath them instead of floating above the
-    // scene as unrelated HTML.
-    const markState = sampleNodeState(markNode, scale);
-    const socialState = sampleNodeState(
-      sceneIce ? socialIceNode : socialFireNode,
-      scale,
-    );
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return {
       burn,
       charred,
@@ -693,30 +680,7 @@ export function initBurn(options = {}) {
       spentMean: spentSum / Math.max(total, 1),
       burnMean: burnSum / Math.max(total, 1),
       recovery: restored / Math.max(total, 1),
-      markState,
-      socialState,
     };
-  }
-
-  function updateContentPointer() {
-    if (!content) return;
-    const seen = pointer.seen ? 1 : 0;
-    const clientX = pointer.x * Math.max(window.innerWidth, 1);
-    const clientY = (1 - pointer.y) * Math.max(window.innerHeight, 1);
-
-    const proximity = (node, radius) => {
-      if (!node || !seen) return 0;
-      const rect = node.getBoundingClientRect();
-      const dx = Math.max(rect.left - clientX, 0, clientX - rect.right);
-      const dy = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
-      return clamp(1 - Math.hypot(dx, dy) / radius, 0, 1) * pointer.active;
-    };
-
-    content.style.setProperty("--burn-mark-heat", proximity(markNode, 230).toFixed(3));
-    content.style.setProperty(
-      "--burn-social-heat",
-      proximity(sceneIce ? socialIceNode : socialFireNode, 190).toFixed(3),
-    );
   }
 
   function simulate(deltaSeconds) {
@@ -906,8 +870,6 @@ export function initBurn(options = {}) {
       pulse = Math.max(0, pulse - deltaSeconds / Math.max(0.2, seconds));
     }
 
-    updateContentPointer();
-
     // Pointer velocity with momentum, for the wind field.
     const instVx = (pointer.x - pointer.previousX) / deltaSeconds;
     const instVy = (pointer.y - pointer.previousY) / deltaSeconds;
@@ -927,62 +889,45 @@ export function initBurn(options = {}) {
     pointer.previousY = pointer.y;
 
     sampleAccum += deltaSeconds;
-    if (sampleAccum >= 0.45) {
+    let sample = collectSheetSample();
+    if (!sample && !metricsFence && sampleAccum >= 0.45) {
       sampleAccum = 0;
-      const sample = sampleSheetDamage();
-      if (sample) {
-        lastDamageSample = sample;
-        if (phase === "recovering" || sample.coverage >= 0.30 || sample.markState.burn >= 0.45) {
-          sceneIce = true;
-        } else if (phase === "pinpoint" && sample.coverage <= 0.10) {
-          sceneIce = false;
-        }
-        if (content) content.dataset.burnScene = sceneIce ? "ice" : "fire";
-        if (content) {
-          content.style.setProperty("--burn-mark-burn", sample.markState.burn.toFixed(3));
-          content.style.setProperty("--burn-social-burn", sample.socialState.burn.toFixed(3));
-          content.style.setProperty(
-            "--burn-mark-heat",
-            Math.max(Number(content.style.getPropertyValue("--burn-mark-heat")) || 0, sample.markState.heat * 0.75).toFixed(3),
-          );
-          content.style.setProperty(
-            "--burn-social-heat",
-            Math.max(Number(content.style.getPropertyValue("--burn-social-heat")) || 0, sample.socialState.heat * 0.75).toFixed(3),
-          );
-        }
-        if (sample.burn > 0.12 || sample.charred > 0.12) sawDamage = true;
-        if (
-          !laterVisual
-          && phase === "pinpoint"
-          && pulse === 0
-          && Math.max(sample.burn, sample.charred) <= 0.02
-          && sample.spentMean <= 0.01
-        ) {
-          laterVisual = true;
-        }
+      sample = requestSheetSample();
+    }
+    if (sample) {
+      lastDamageSample = sample;
+      if (sample.burn > 0.12 || sample.charred > 0.12) sawDamage = true;
+      if (
+        !laterVisual
+        && phase === "pinpoint"
+        && pulse === 0
+        && Math.max(sample.burn, sample.charred) <= 0.02
+        && sample.spentMean <= 0.01
+      ) {
+        laterVisual = true;
+      }
 
-        if (
-          phase === "burning"
-          && spreadMode > 0
-          && !sheetTaken
-          && sample.coverage >= settings.recoverCoverageDone
-        ) {
-          // Every simulation texel is open: the vortex starts now. Freeze
-          // healing for the hold, then use the unchanged recovery rates.
-          sheetTaken = true;
-          recoveryHoldRemaining = settings.recoveryHoldSeconds;
-          setPhase("recovering");
-        } else if (
-          phase === "recovering"
-          && sawDamage
-          && sample.recovery >= settings.reigniteRecovery
-        ) {
-          // Mostly recovered: from now on the pointer burns only
-          // where it is. The last traces of scorch fade on their own.
-          spreadMode = 0;
-          sheetTaken = false;
-          setPhase("pinpoint");
-        }
+      if (
+        phase === "burning"
+        && spreadMode > 0
+        && !sheetTaken
+        && sample.coverage >= settings.recoverCoverageDone
+      ) {
+        // Every simulation texel is open: the vortex starts now. Freeze
+        // healing for the hold, then use the unchanged recovery rates.
+        sheetTaken = true;
+        recoveryHoldRemaining = settings.recoveryHoldSeconds;
+        setPhase("recovering");
+      } else if (
+        phase === "recovering"
+        && sawDamage
+        && sample.recovery >= settings.reigniteRecovery
+      ) {
+        // Mostly recovered: from now on the pointer burns only
+        // where it is. The last traces of scorch fade on their own.
+        spreadMode = 0;
+        sheetTaken = false;
+        setPhase("pinpoint");
       }
     }
 
@@ -1027,6 +972,7 @@ export function initBurn(options = {}) {
     setPointerActive,
     reset() {
       clearState();
+      dropPendingSample();
       spreadMode = 1;
       sawDamage = false;
       laterVisual = false;
@@ -1073,6 +1019,7 @@ export function initBurn(options = {}) {
       gl.deleteProgram(fireCompositeProgram.program);
       gl.deleteProgram(recoveryCompositeProgram.program);
       gl.deleteProgram(recoverySettleProgram.program);
+      gl.deleteProgram(laterCompositeProgram.program);
       canvas.classList.remove("is-ready");
     },
   };

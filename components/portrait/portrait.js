@@ -1,19 +1,19 @@
 import { QUAD_VS, FLUID_FS, COMPOSITE_FS } from './shaders.js';
 import { COMPOSITION, PORTRAIT_SETTINGS } from './settings.js';
 import { createHaloTexture } from './halo.js';
-import { createAtmosphere } from './atmosphere.js';
+import { createAtmosphere } from './atmosphere.js?v=2';
 import { createMorseSignal } from './morse.js';
 import { createPortalSeeds } from './motion.js';
-import { createGallery } from './gallery.js?v=4';
+import { createGallery } from './gallery.js?v=5';
 import { bindGalleryInteraction } from './gallery-interaction.js';
 import { galleryWheelDelta } from './gallery-scroll.js';
 
 const ASSETS = {
-  dust: new URL('../../Assets/background/Dust.png', import.meta.url).href,
-  space: new URL('../../Assets/background/Space.png', import.meta.url).href,
+  dust: new URL('../../Assets/optimized/background/Dust.webp', import.meta.url).href,
+  space: new URL('../../Assets/optimized/background/Space.webp', import.meta.url).href,
   crown: new URL('../../Assets/Portrait/crowned.png', import.meta.url).href,
   veil: new URL('../../Assets/Portrait/veiled.png', import.meta.url).href,
-  ufo: new URL('../../Assets/Elements/ufo.png', import.meta.url).href,
+  ufo: new URL('../../Assets/optimized/Elements/ufo.webp', import.meta.url).href,
 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -63,6 +63,9 @@ export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }
   let transition = null;
   let atmosphere, gallery;
   let activeScene = scene;
+  // A host can hide the portrait behind another scene. The simulation keeps
+  // its clock, but nothing is drawn until the portrait can be seen again.
+  let visible = true;
   const pointer = { x: width / 2, y: height / 2, targetX: width / 2, targetY: height / 2,
     lastX: width / 2, lastY: height / 2, vx: 0, vy: 0, active: false, seen: false, presence: 0 };
 
@@ -291,9 +294,10 @@ export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }
         transition.elapsed += dt;
         progress = clamp(transition.elapsed / transition.duration, 0, 1);
       }
-      atmosphere.update(dt, elapsed, pointer, scale, reduced.matches, transition, activeScene);
-      gallery.update(dt, pointer, scale, originX, originY, reduced.matches, transition, activeScene);
-      composite(progress);
+      const render = visible || !ready;
+      atmosphere.update(dt, elapsed, pointer, scale, reduced.matches, transition, activeScene, render);
+      gallery.update(dt, pointer, scale, originX, originY, reduced.matches, transition, activeScene, render);
+      if (render) composite(progress);
       if (!ready) { ready = true; root.classList.add('is-ready'); }
       if (transition && progress >= 1) {
         const finished = transition;
@@ -362,6 +366,7 @@ export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }
 
     return {
       destroy,
+      setVisible(value) { visible = Boolean(value); },
       isGalleryScrollRegion(clientX, clientY) {
         // Let the current Dust/Space switch finish without starting a page exit.
         if (transition) return true;

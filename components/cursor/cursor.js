@@ -9,7 +9,6 @@ const SETTINGS = Object.freeze({
   maxParticles: 36,
   sparkStartSpeed: 95,
   smokeStartSpeed: 180,
-  burnSpeed: 760,
   fullSpeed: 980,
 });
 
@@ -22,12 +21,6 @@ if (!fxCanvas) {
   fxCanvas.setAttribute("aria-hidden", "true");
   document.body.appendChild(fxCanvas);
 }
-
-const motionState = root.querySelector("#motion-state");
-const testButton = root.querySelector("#test-button");
-const testButtonLabel = testButton
-  ? testButton.querySelector(".test-button__label")
-  : null;
 
 const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -91,12 +84,15 @@ let canvasWidth = window.innerWidth;
 let canvasHeight = window.innerHeight;
 let canvasDpr = 1;
 let previousFrameAt = performance.now();
-let displayedState = "IDLE";
 let trailDistanceRemainder = 0;
 let pendingBurst = 0;
 let lastBurstAt = -Infinity;
-let buttonResetTimer;
 let idleSmokeCooldown = 0;
+// The host hides this canvas while another scene is on screen, and CSS fades
+// it out during the cold recovery. The flame keeps simulating either way;
+// only drawing pixels nobody can see is skipped.
+const canCheckVisibility = typeof fxCanvas.checkVisibility === "function";
+let clearedWhileHidden = false;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -339,6 +335,12 @@ function updateParticles(deltaSeconds, windX = 0, windY = 0) {
   updateParticleGroup(particles.spark, deltaSeconds);
 }
 
+function clipAround(x, y, reach) {
+  fx.beginPath();
+  fx.rect(x - reach, y - reach, reach * 2, reach * 2);
+  fx.clip();
+}
+
 function drawSmoke() {
   if (!particles.smoke.length) return;
 
@@ -350,11 +352,15 @@ function drawSmoke() {
     const fadeIn = clamp(progress / 0.14, 0, 1);
     const fadeOut = Math.pow(1 - progress, 1.35);
     const size = lerp(particle.startSize, particle.endSize, 1 - Math.pow(1 - progress, 1.8));
+    const blur = Math.max(1.1, size * 0.2);
 
     fx.save();
+    // Chrome blurs a filtered draw inside a layer as large as the clip. Bound
+    // it to this puff plus its blur: same pixels, a fraction of the GPU work.
+    clipAround(particle.x, particle.y, size * 0.5 + blur * 3 + 2);
     fx.translate(particle.x, particle.y);
     fx.rotate(particle.rotation);
-    fx.filter = `blur(${Math.max(1.1, size * 0.2).toFixed(2)}px)`;
+    fx.filter = `blur(${blur.toFixed(2)}px)`;
     fx.globalAlpha = particle.alpha * fadeIn * fadeOut;
     fx.fillStyle = "#7a716b";
     fx.beginPath();
@@ -387,11 +393,15 @@ function drawSparks() {
     const streak = clamp(speed * 0.02, 0.8, 5.2) * (1 - progress * 0.3);
     const nx = speed > 0.01 ? spark.vx / speed : 0;
     const ny = speed > 0.01 ? spark.vy / speed : -1;
+    const glow = 2.4 + heat * 3.4;
 
+    // Shadows are blurred in a clip-sized layer too; see drawSmoke.
+    fx.save();
+    clipAround(spark.x - nx * streak / 2, spark.y - ny * streak / 2, streak / 2 + spark.size + glow * 1.5 + 2);
     fx.globalAlpha = spark.alpha * fade;
     fx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
     fx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.9)`;
-    fx.shadowBlur = 2.4 + heat * 3.4;
+    fx.shadowBlur = glow;
     fx.lineWidth = spark.size * (0.75 + heat * 0.55) * (1 - progress * 0.3);
     fx.beginPath();
     fx.moveTo(spark.x - nx * streak, spark.y - ny * streak);
@@ -405,6 +415,7 @@ function drawSparks() {
       fx.arc(spark.x, spark.y, spark.size * 0.38 * (0.65 + heat * 0.5), 0, Math.PI * 2);
       fx.fill();
     }
+    fx.restore();
   }
 
   fx.shadowBlur = 0;
@@ -699,18 +710,9 @@ function setCursorVisibility(requested) {
   if (!active) clearFx();
 }
 
-function updateMotionLabel(speed) {
-  let nextState = "IDLE";
-  if (!reducedMotion.matches && speed >= SETTINGS.burnSpeed) nextState = "STRIKE";
-  else if (!reducedMotion.matches && speed >= SETTINGS.sparkStartSpeed) {
-    nextState = "FRICTION";
-  }
-
-  if (nextState !== displayedState) {
-    displayedState = nextState;
-    if (motionState) motionState.value = nextState;
-    document.body.dataset.motion = nextState.toLowerCase();
-  }
+function canvasVisible() {
+  return !canCheckVisibility
+    || fxCanvas.checkVisibility({ opacityProperty: true, visibilityProperty: true });
 }
 
 function onPointerMove(event) {
@@ -817,14 +819,16 @@ function animate(now) {
 
   const motion = smoothstep(SETTINGS.sparkStartSpeed, SETTINGS.fullSpeed, pointer.speed);
   updateIon(now, deltaSeconds, motion, originX, originY, windX, windY);
-  updateMotionLabel(pointer.speed);
 
   if (!pointer.visible || !fx) {
     requestAnimationFrame(animate);
     return;
   }
 
-  fx.clearRect(0, 0, canvasWidth, canvasHeight);
+  const drawing = canvasVisible();
+  // Clear once on hiding so the canvas never reappears with a stale flame.
+  if (drawing || !clearedWhileHidden) fx.clearRect(0, 0, canvasWidth, canvasHeight);
+  clearedWhileHidden = !drawing;
 
   if (!reducedMotion.matches) {
     consumeTrailSamples();
@@ -874,11 +878,13 @@ function animate(now) {
     }
 
     updateParticles(deltaSeconds, windX, windY);
-    drawSmoke();
-    drawSparks();
+    if (drawing) {
+      drawSmoke();
+      drawSparks();
+    }
   }
 
-  drawIonCore(motion);
+  if (drawing) drawIonCore(motion);
   requestAnimationFrame(animate);
 }
 
@@ -894,16 +900,6 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("blur", () => setCursorVisibility(false));
 window.addEventListener("resize", resizeFxCanvas, { passive: true });
-
-if (testButton && testButtonLabel) {
-  testButton.addEventListener("click", () => {
-    window.clearTimeout(buttonResetTimer);
-    testButtonLabel.textContent = "CLICK RECEIVED";
-    buttonResetTimer = window.setTimeout(() => {
-      testButtonLabel.textContent = "CLICK TEST";
-    }, 1_100);
-  });
-}
 
 finePointer.addEventListener("change", () => setCursorVisibility(false));
 forcedColors.addEventListener("change", () => setCursorVisibility(false));

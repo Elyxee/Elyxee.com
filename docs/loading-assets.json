@@ -110,6 +110,116 @@
     "fullResolutionLossless": false
   },
   {
+    "source": "Assets/background/Space.png",
+    "output": "Assets/optimized/background/Space.webp",
+    "sourceBytes": 6967976,
+    "bytes": 4450784,
+    "size": [
+      2688,
+      1792
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/background/Dust.png",
+    "output": "Assets/optimized/background/Dust.webp",
+    "sourceBytes": 3786585,
+    "bytes": 2808856,
+    "size": [
+      1536,
+      1024
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Elements/ufo.png",
+    "output": "Assets/optimized/Elements/ufo.webp",
+    "sourceBytes": 432362,
+    "bytes": 278116,
+    "size": [
+      2172,
+      724
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/frames/european.png",
+    "output": "Assets/optimized/Portrait/frames/european.webp",
+    "sourceBytes": 1013977,
+    "bytes": 599682,
+    "size": [
+      1121,
+      1403
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/frames/gilded.png",
+    "output": "Assets/optimized/Portrait/frames/gilded.webp",
+    "sourceBytes": 1528749,
+    "bytes": 1084366,
+    "size": [
+      896,
+      1344
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Frame/\u706b\u7130\u76f8\u6846.png",
+    "output": "Assets/optimized/Frame/\u706b\u7130\u76f8\u6846.webp",
+    "sourceBytes": 1993452,
+    "bytes": 1424720,
+    "size": [
+      1536,
+      1024
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/digital-nations.png",
+    "output": "Assets/optimized/Portrait/artworks/digital-nations.webp",
+    "sourceBytes": 1700313,
+    "bytes": 1218066,
+    "size": [
+      1672,
+      941
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/longevity.png",
+    "output": "Assets/optimized/Portrait/artworks/longevity.webp",
+    "sourceBytes": 1853053,
+    "bytes": 1320310,
+    "size": [
+      1672,
+      941
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/equality.png",
+    "output": "Assets/optimized/Portrait/artworks/equality.webp",
+    "sourceBytes": 2662538,
+    "bytes": 1157982,
+    "size": [
+      1536,
+      866
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/mental-shackles.png",
+    "output": "Assets/optimized/Portrait/artworks/mental-shackles.webp",
+    "sourceBytes": 2049888,
+    "bytes": 951578,
+    "size": [
+      1536,
+      865
+    ],
+    "fullResolutionLossless": true
+  },
+  {
     "source": "Assets/Transitions/combustion-cloud.png",
     "output": "Assets/optimized/combustion-preview.webp",
     "sourceBytes": 3119417,

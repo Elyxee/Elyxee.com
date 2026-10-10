@@ -14,9 +14,9 @@
     <link rel="preload" as="image" href="Assets/optimized/home-ice.webp" />
     <link rel="preload" as="font" href="Assets/Font/narri-regular.woff2" type="font/woff2" crossorigin />
     <link rel="preload" as="font" href="Assets/Font/Gabriela-Regular.ttf" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="styles.css?v=88" />
+    <link rel="stylesheet" href="styles.css?v=89" />
     <link rel="stylesheet" href="components/cursor/cursor.css?v=38" />
-    <link rel="stylesheet" href="components/portrait/portrait.css?v=8" />
+    <link rel="stylesheet" href="components/portrait/portrait.css?v=9" />
     <link rel="stylesheet" href="components/site/site.css?v=9" />
     <link rel="stylesheet" href="components/about/about.css?v=3" />
     <link rel="stylesheet" href="components/site/page-passage.css?v=2" />
@@ -74,9 +74,10 @@
     <div class="stage stage--portrait" data-stage-layer="portrait" aria-hidden="true" inert>
       <main class="portrait" aria-label="Elyxee，移动鼠标探索另一面的肖像">
         <div class="portrait__fallback" aria-hidden="true">
+          <!-- The heads load when the portrait mounts, after the opening. -->
           <div class="portrait__composition">
-            <img class="portrait__head portrait__head--veiled" src="Assets/Portrait/veiled.png" fetchpriority="low" decoding="async" alt="" />
-            <img class="portrait__head portrait__head--crowned" src="Assets/Portrait/crowned.png" fetchpriority="low" decoding="async" alt="" />
+            <img class="portrait__head portrait__head--veiled" data-src="Assets/Portrait/veiled.png" fetchpriority="low" decoding="async" alt="" />
+            <img class="portrait__head portrait__head--crowned" data-src="Assets/Portrait/crowned.png" fetchpriority="low" decoding="async" alt="" />
           </div>
         </div>
         <canvas id="portrait-fx" aria-hidden="true"></canvas>
@@ -87,6 +88,6 @@
       </main>
     </div>
 
-    <script type="module" src="components/site/site.js?v=23"></script>
+    <script type="module" src="components/site/site.js?v=24"></script>
   </body>
 </html>

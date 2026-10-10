@@ -31,14 +31,9 @@ body {
   color: var(--ink);
 }
 
-/* Burn section content from the Figma artboard. The copy is a material layer:
-   burn.js feeds the local state field into these variables so fire and ice can
-   tint, shake, frost and char the information without stealing pointer input. */
+/* Burn section content from the Figma artboard. The copy is drawn by the
+   inscription material layers without stealing pointer input. */
 .burn-content {
-  --burn-mark-heat: 0;
-  --burn-mark-burn: 0;
-  --burn-social-heat: 0;
-  --burn-social-burn: 0;
   position: fixed;
   inset: 0;
   z-index: 2;

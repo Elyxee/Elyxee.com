@@ -175,7 +175,7 @@ export function createAtmosphere(gl, spaceImage, ufoImage) {
     gl.disable(gl.BLEND);
   }
 
-  function update(dt, time, pointer, scale, reduced, transition, scene) {
+  function update(dt, time, pointer, scale, reduced, transition, scene, render = true) {
     const progress = transition ? Math.min(transition.elapsed / transition.duration, 1) : 0;
     const lift = transition?.to === 1 ? Math.sin(progress * Math.PI) : 0;
     const settle = transition?.to === 0 ? Math.sin(progress * Math.PI) : 0;
@@ -207,7 +207,7 @@ export function createAtmosphere(gl, spaceImage, ufoImage) {
         sprite(g.x, g.y, length, size, g.color, alpha, Math.atan2(g.vy, g.vx));
       }
     }
-    if (dustVisible || reduced) draw(0);
+    if (render && (dustVisible || reduced)) draw(0);
 
     count = 0;
     if (!reduced && spaceVisible) {
@@ -254,7 +254,7 @@ export function createAtmosphere(gl, spaceImage, ufoImage) {
         if (t === 1) { flight = null; nextUfo = spaceTime + 18 + Math.random() * 20; }
       }
     }
-    if (spaceVisible || reduced) draw(1);
+    if (render && (spaceVisible || reduced)) draw(1);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
