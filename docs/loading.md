@@ -40,6 +40,7 @@
 - **看不见时不画**：光标画布被隐藏（Portfolio、About、开场）或在冷态恢复中透明时，只继续模拟、不再绘制。Portfolio 在 Home 下方或 About 上方完全被遮住时，同样只推进状态和水波模拟，跳过全屏合成（`effect.setVisible`）。重新出现的第一帧状态与一直绘制时相同。
 - **燃烧状态采样**：WebGL2 改为像素缓冲 + fence 异步读取，并去掉每次采样后的 `getError()`。Chrome 读取时仍有一次 GPU 进程往返，但每次阻塞从约 90–100 ms 降到约 20 ms；采样间隔和判定逻辑不变。WebGL1 保留原同步读取。
 - **About 预备**：原来在 Home → Portfolio 转场中途创建 About 图层和两个 WebGL 上下文；现在等 Portfolio 到达后空闲时再做。2026-10-11 起 About 与舞台共用同一条火线，不再有第二个火线画布（见 [interfaces.md](interfaces.md)）。
+- **第一次切到 Dust 的卡顿**（2026-10-11）：Dust 的画框贴图原来要等切换那一刻才在动画帧里当场制作，需要同步解码几张大图并读回像素，第一次切换常掉到 12–26 fps、拖到 4–6 秒。现在 Portfolio 装载后，画廊在空闲时逐张准备另一场景的贴图，图片先在后台线程解码，制作仍走原来的 `textureFor()`，结果相同；切换稳定约 2.7 秒、55–60 fps，Home 上没有新增卡顿。
 - 删除无人使用的代码：Burn 每帧测量标题和图标位置并写入四个 CSS 变量（无样式读取）、`data-burn-scene`、`is-recovering`；光标测试页残留的 `#motion-state` / `#test-button` / `body[data-motion]`；`data-figma-node`。
 
 ## 加载

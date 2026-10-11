@@ -363,6 +363,8 @@ export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }
       destroy();
     }, { signal: listeners.signal });
     frameHandle = requestAnimationFrame(frame);
+    // Ready the frames of the scene not shown first, ahead of the first switch.
+    gallery.prepare(1 - activeScene).catch(error => console.warn('Gallery prepare:', error));
 
     return {
       destroy,

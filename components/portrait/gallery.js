@@ -1,6 +1,6 @@
 import { FRAME_ITEMS } from './gallery-items.js';
 import { COMPOSITION } from './settings.js';
-import { createGallerySequence } from './gallery-sequence.js';
+import { createGallerySequence, GALLERY_SEQUENCES } from './gallery-sequence.js';
 import { isNearGalleryFrame, isNearGalleryTrack } from './gallery-region.js';
 import { artworkFor, DUST_ARTWORKS, SPACE_ARTWORKS, loadGalleryImage, mountArtwork } from './artworks.js';
 import { createGallerySelection } from './gallery-interaction.js';
@@ -111,6 +111,28 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
     sourceTextures.set(key, texture);
     hitMasks.set(key, alphaMap(image));
     return texture;
+  }
+  // A scene's frames are first drawn the moment it appears: for Dust, in the
+  // middle of the switch. Preparing them ahead, one per idle moment and with
+  // their images decoded off the main thread, keeps that work out of the
+  // switch. It runs the same textureFor() the renderer would, so the textures
+  // are identical; anything not ready yet is still made on first draw.
+  let destroyed = false;
+  const idle = () => new Promise(resolve => window.requestIdleCallback
+    ? requestIdleCallback(resolve, { timeout: 1000 }) : setTimeout(resolve, 50));
+  async function prepare(scene) {
+    const frameIds = GALLERY_SEQUENCES[scene].frames;
+    for (const [contentIndex, id] of frameIds.entries()) {
+      const frame = FRAME_ITEMS.find(entry => entry.id === id);
+      const item = { ...frame, frameId: id, scene, contentIndex };
+      const art = artworkFor(item);
+      if (sourceTextures.has(`${id}:${art?.id ?? 'empty'}`)) continue;
+      await idle();
+      await Promise.all([frames.get(id).decode(), art && artworks.get(art.id).decode()]).catch(() => {});
+      if (destroyed) return;
+      gl.activeTexture(gl.TEXTURE0);
+      textureFor(item);
+    }
   }
   const sequences = [0,1].map(scene => createGallerySequence(scene, contentByScene[scene]));
   const visible = [[], []];
@@ -226,7 +248,7 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
     gl.disable(gl.BLEND); gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   }
 
-  return { textures: targets.map(t=>t.texture), resize, update,
+  return { textures: targets.map(t=>t.texture), resize, update, prepare,
     get selection() { return selection.selected; },
     clearSelection() { selection.clear(); },
     activate(item) {
@@ -264,6 +286,7 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
     },
     resetScroll() { sequences.forEach(sequence => sequence.resetScroll()); },
     destroy() {
+      destroyed = true;
       sourceTextures.forEach(texture=>gl.deleteTexture(texture));
       targets.forEach(t=>{gl.deleteTexture(t.texture);gl.deleteFramebuffer(t.framebuffer);});
       gl.deleteVertexArray(vao); gl.deleteProgram(program);
