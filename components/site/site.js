@@ -49,8 +49,6 @@ let intro = { phase: "hold", t: 0, life: 0 };
 let inputEnabled = false;
 let current = "home";   // the view the site last settled on
 let owner = "home";     // the view receiving input; null while a page passage runs
-let pageWasActive = false;
-let touch = null;       // active touch on the stage, see input below
 let loadingWheelUntil = 0;
 let previousFrameAt = performance.now();
 const preloadQueued = new Set();
@@ -138,7 +136,7 @@ for (const view of VIEWS.filter(view => view.passage === "page")) {
     curtain,
     showUnder,
     canNavigate: () => inputEnabled,
-    onChange: pageChanged,
+    onChange: syncOwner,
     onSettle: (id, record) => settle(id, { record }),
   });
 }
@@ -159,12 +157,6 @@ function syncOwner() {
   if (next === owner) return;
   owner = next;
   for (const [id, scene] of Object.entries(scenes)) scene.setActive(id === owner);
-}
-
-function pageChanged() {
-  const active = Boolean(activePage());
-  if (active !== pageWasActive) { pageWasActive = active; touch = null; }
-  syncOwner();
 }
 
 function settle(id, { record = true } = {}) {
@@ -232,7 +224,7 @@ function apply(dt) {
   const view = page?.settled ? page.view.id : intro ? "intro" : pv <= 0.02 ? "burn" : pv >= 0.98 ? "portrait" : "transit";
   if (html.dataset.stage !== view) html.dataset.stage = view;
   if (view === "portrait") preload(STAGE_END.below);
-  // Whichever way a stage view is reached (click, wheel, touch, keys), the
+  // Whichever way a stage view is reached (click, wheel, keys), the
   // address follows once the passage settles, so Back returns to the last one.
   if (!page && (view === "burn" || view === "portrait")) {
     const id = view === "portrait" ? "portfolio" : "home";
@@ -373,25 +365,9 @@ window.addEventListener("keydown", event => {
 });
 
 // On touch screens views change only by tapping links: a vertical swipe would
-// be ambiguous between the scene's own drag and a page change. A swipe on the
-// stage outside the gallery is still claimed here, so the scenes' own touch
-// handling keeps exactly its previous reach; it just no longer moves the stage.
-document.addEventListener("pointerdown", event => {
-  if (activePage()) return;
-  if (!inputEnabled || event.pointerType !== "touch" || !event.isPrimary) return;
-  if (event.target.closest?.(".scene-switch, .portrait-home")) return;
-  if (atStageEnd() && scenes.portfolio.isScrollRegion(event.clientX, event.clientY)) return;
-  touch = { id: event.pointerId };
-  event.stopPropagation();
-}, { capture: true, passive: true });
-document.addEventListener("pointermove", event => {
-  if (touch && event.pointerId === touch.id) event.stopPropagation();
-}, { capture: true, passive: true });
-for (const name of ["pointerup", "pointercancel"]) {
-  document.addEventListener(name, event => {
-    if (touch && event.pointerId === touch.id) touch = null;
-  }, { capture: true, passive: true });
-}
+// be ambiguous between a scene's own drag and a page change. The coordinator
+// therefore never handles touch; each scene receives the finger as it would a
+// mouse (the black hole in Space, the liquid in Dust).
 
 window.addEventListener("pageshow", event => {
   if (event.persisted) location.reload();

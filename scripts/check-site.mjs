@@ -121,8 +121,18 @@ async function open(path) {
     if (await evaluate(`!!document.querySelector('.portrait.is-ready') && document.documentElement.dataset.stage === 'burn'`).catch(() => false)) break;
     await sleep(100);
   }
-  // Let the portrait finish its first texture work before the first gesture.
-  await sleep(1500);
+  // The portrait's first texture work can stall the page for a moment; start
+  // once about a second of frames has run smoothly, so a stall cannot split a
+  // test gesture in two.
+  await evaluate(`new Promise(done => {
+    let smooth = 0, last = performance.now();
+    const end = last + 8000;
+    (function frame(now) {
+      smooth = now - last < 50 ? smooth + 1 : 0;
+      last = now;
+      if (smooth >= 60 || now > end) done(); else requestAnimationFrame(frame);
+    })(last);
+  })`);
 }
 async function center(selector) {
   return evaluate(`(() => { const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r && [r.left + r.width / 2, r.top + r.height / 2]; })()`);
