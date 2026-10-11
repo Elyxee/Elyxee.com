@@ -6,7 +6,7 @@
 // single stage progress value (0 = burn, 1 = portrait) from scroll input, and
 // reveals the arriving layer behind one continuous, rising fire front.
 
-import { createAboutPassage } from "./page-passage.js?v=8";
+import { createAboutPassage } from "./page-passage.js?v=9";
 import { initBurn } from "../burn/index.js?v=85";
 import { initCursor } from "../cursor/index.js?v=43";
 import { initBurnTypography } from "../burn/type/typography.js?v=80";
@@ -217,7 +217,11 @@ function apply(dt) {
     if (window.requestIdleCallback) requestIdleCallback(preload, { timeout: 600 });
     else setTimeout(preload, 200);
   }
-  if (!intro && pv === 0 && !aboutPassage?.active) aboutPassage?.syncHomeRoute();
+  // Whichever way a view is reached (click, wheel, touch), the address follows
+  // once the passage settles, so Back returns to the previous view.
+  if (!aboutPassage?.active && (stage === "burn" || stage === "portrait")) {
+    aboutPassage?.syncRoute(stage === "portrait" ? "portfolio" : "home");
+  }
 
   // Cursor handoff: a few grains leave the real pointer as the smoke passes.
   if (handoff.pointer.seen && !intro) {

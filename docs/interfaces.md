@@ -63,7 +63,7 @@ portrait.destroy();
 
 `createFireCurtain({ dprCap, opening = true })` 返回 `element / ready / supported / visible / state / set / render / resize / destroy`。宿主用 `set(...)` 传入火线和开场状态，用 `render(time)` 绘制；`time` 为秒。几何与遮罩规则在 `transition-front.js`。不播放开场的火线传 `opening: false`，跳过开场几何与预览纹理。这是共享渲染接口，还没有通用的 `transition.play({ from, to })` 场景路由 API。
 
-`createAboutPassage({ link, prepareDestination, onOwnershipChange, canNavigate })` 提供 `active / settled / preload / open / scrollFromPortrait / dragFromPortrait / syncHomeRoute / destroy`。`prepareDestination` 决定转场下面的目标场景；`onOwnershipChange` 交接输入，不要让两个场景同时响应同一个手势。
+`createAboutPassage({ link, prepareDestination, onOwnershipChange, canNavigate })` 提供 `active / settled / preload / open / scrollFromPortrait / dragFromPortrait / syncRoute / destroy`。网址由这里统一写入：`/`、`/portfolio`、`/about`；`site.js` 在 Home / Portfolio 到位时调用 `syncRoute(view)`，About 进出由本模块自己记录。`prepareDestination` 决定转场下面的目标场景；`onOwnershipChange` 交接输入，不要让两个场景同时响应同一个手势。
 
 ### Cursor 和文字
 

@@ -340,8 +340,8 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
       gesture.touch = { y: startY, position: gesture.motion.hold() };
       dragGesture(y, now);
     },
-    syncHomeRoute() {
-      if (phase === 'closed' && viewFromPath(location.pathname) === 'portfolio') route('home', true);
+    syncRoute(view) {
+      if (phase === 'closed') route(view);
     },
     destroy() {
       destroyed = true; gesture = null; controller.abort(); cancelAnimationFrame(animation); cancelAnimation?.();
