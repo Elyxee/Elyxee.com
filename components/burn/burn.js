@@ -1,7 +1,7 @@
-import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js?v=77";
+import { QUAD_VS, NOISE_BAKE_FS, SIM_FS, COMPOSITE_FS } from "./shaders.js";
 
-import { RECOVERY_COMPOSITE_FS, RECOVERY_SETTLE_FS } from "./recovery-visual.js?v=75";
-import { LATER_COMPOSITE_FS } from "./later-visual.js?v=82";
+import { RECOVERY_COMPOSITE_FS, RECOVERY_SETTLE_FS } from "./recovery-visual.js";
+import { LATER_COMPOSITE_FS } from "./later-visual.js";
 import { loadImage } from "../shared/load-image.js";
 
 // Every rate is per second so behaviour is frame-rate independent.
@@ -81,7 +81,7 @@ const DEFAULT_FIRE = new URL("../../Assets/optimized/home-fire.webp", import.met
 const DEFAULT_ICE = new URL("../../Assets/optimized/home-ice.webp", import.meta.url).href;
 const FALLBACK_FIRE = new URL("../../Assets/background/Fire-clean.png", import.meta.url).href;
 const FALLBACK_ICE = new URL("../../Assets/background/Ice.png", import.meta.url).href;
-const STYLE_HREF = new URL("./burn.css?v=44", import.meta.url).href;
+const STYLE_HREF = new URL("./burn.css", import.meta.url).href;
 
 const QUAD = new Float32Array([-1, -1, 3, -1, -1, 3]);
 

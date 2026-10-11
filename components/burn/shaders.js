@@ -1,6 +1,6 @@
 // GLSL ES 1.00 — runs unmodified on both WebGL1 and WebGL2 contexts.
 
-import { REIGNITE_GLSL } from "./reignite-visual.js?v=1";
+import { REIGNITE_GLSL } from "./reignite-visual.js";
 
 export const QUAD_VS = `
 attribute vec2 aPos;

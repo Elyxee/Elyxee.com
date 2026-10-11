@@ -1,7 +1,7 @@
 // First-pass recovery appearance from c90860d, with late healed-rim cleanup.
 // Keep this render-only;
 // simulation, lifecycle gates and later-pass fire use the current implementation.
-import { REIGNITE_GLSL } from "./reignite-visual.js?v=1";
+import { REIGNITE_GLSL } from "./reignite-visual.js";
 
 export const RECOVERY_COMPOSITE_FS = `
 precision highp float;

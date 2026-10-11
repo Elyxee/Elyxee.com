@@ -1,29 +1,25 @@
-import { createFireCurtain } from './fire-curtain.js?v=11';
-import { FIRE_EDGE, portraitClip, portraitShare } from './transition-front.js?v=2';
-import { createTransitionMotion } from './transition-motion.js?v=5';
-import { mountAbout } from '../about/mount.js?v=3';
+import { FIRE_EDGE, portraitClip, portraitShare } from './transition-front.js';
+import { createTransitionMotion } from './transition-motion.js';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-// Each view has its own path; Home is the site root.
-const PATHS = { home: '/', portfolio: '/portfolio', about: '/about' };
-export const viewFromPath = pathname =>
-  Object.keys(PATHS).find(view => PATHS[view] === pathname.replace(/\/+$/, '')) ?? 'home';
-const plainClick = event => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 
-// Live content replaces live content behind Portfolio's existing fire seam.
-export function createAboutPassage({ link, prepareDestination, onOwnershipChange, canNavigate = () => true }) {
+// A page view opens over the stage behind the shared fire seam: live content
+// replaces live content. Clicks play a fixed, symmetric timeline; wheel and
+// touch use the same spring, flick continuation, reversal and visible-area
+// settling as Home ↔ Portfolio. While it runs this passage owns the input,
+// including the exit gestures at the top of the page.
+//
+// It does not touch the address bar, the title or the stage layers: it tells
+// the coordinator through `onChange()` (any phase change) and
+// `onSettle(viewId, record)` (arrived on the page, or back on the stage), and
+// asks for a stage view to be put underneath with `showUnder(viewId)`.
+export function createPagePassage({ view, scene, above, curtain, showUnder, canNavigate = () => true,
+  onChange = () => {}, onSettle = () => {} }) {
   const html = document.documentElement;
-  const hostTitle = document.title;
-  const layer = document.createElement('section');
-  layer.className = 'page-passage__about';
-  layer.setAttribute('aria-label', 'About Elyxee');
-  layer.setAttribute('aria-hidden', 'true');
-  layer.tabIndex = -1;
-  layer.inert = true;
-  document.body.append(layer);
+  const layer = scene.layer;
   const controller = new AbortController(), { signal } = controller;
-  let phase = 'closed', page, loading, fire, animation = 0, destroyed = false;
+  let phase = 'closed', animation = 0, destroyed = false;
   let lastWheel = -Infinity, atTopGesture = false, tailUntil = 0, tailDirection = 0;
   let finger = null, cancelAnimation, gesture = null;
   const travel = 620;
@@ -32,93 +28,63 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
     phase = value;
     if (phase === 'closed') delete html.dataset.pagePassage;
     else html.dataset.pagePassage = phase;
+    onChange();
   }
-  function route(view, replace = false) {
-    const url = new URL(PATHS[view], location.href);
-    if (url.href !== location.href) history[replace ? 'replaceState' : 'pushState']({ view }, '', url);
-  }
-  function prepare() {
-    if (!loading) loading = (async () => {
-      page = mountAbout({ root: layer, scrollRoot: layer, onNavigate({ event }) {
-        if (!plainClick(event)) return;
-        leave('home');
-        return false;
-      } });
-      page.setActive(false);
-      // Two separate tasks: each creates a WebGL context, which blocks.
-      await new Promise(resolve => setTimeout(resolve));
-      if (destroyed) return;
-      try { fire = createFireCurtain({ opening: false }); fire.element.id = 'page-passage-fire'; } catch { /* Live-layer fade fallback. */ }
-      await Promise.allSettled([
-        document.fonts.ready,
-        ...[...layer.querySelectorAll('.about-hero__photo img, .about-scene__texture')].map(image => image.decode()),
-        fire?.ready,
-      ]);
-    })();
-    return loading;
+
+  function render(edge, mode, seconds) {
+    curtain.set({ edge, mode, life: 1, dim: 0, opening: 0 });
+    curtain.render(seconds);
   }
 
   function draw(position, seconds, mode) {
     const edge = FIRE_EDGE.hidden + (FIRE_EDGE.full - FIRE_EDGE.hidden) * position;
-    if (!fire?.supported || reduced()) {
+    if (!curtain.supported || reduced()) {
       layer.style.clipPath = '';
       layer.style.opacity = position;
     } else {
       layer.style.opacity = '1';
       layer.style.clipPath = portraitClip(edge, seconds);
-      fire.set({ edge, mode, life: 1 });
-      fire.render(seconds);
+      render(edge, mode, seconds);
     }
   }
 
-  function finishAbout(historyChange) {
+  function finishPage(record) {
     layer.style.clipPath = '';
     layer.style.opacity = '';
-    layer.inert = false;
-    layer.setAttribute('aria-hidden', 'false');
-    setPhase('about');
-    document.title = 'About — Elyxee';
+    setPhase('settled');
     lastWheel = -Infinity;
     layer.focus({ preventScroll: true });
-    if (historyChange) route('about');
+    onSettle(view.id, record);
   }
 
-  function finishHost(destination, historyChange) {
+  function finishHost(destination, record) {
     layer.classList.remove('is-shown');
     layer.style.clipPath = '';
     layer.style.opacity = '';
-    layer.inert = true;
-    layer.setAttribute('aria-hidden', 'true');
-    page?.setActive(false);
+    scene.setVisible(false);
     setPhase('closed');
-    onOwnershipChange(false);
-    document.title = hostTitle;
-    if (historyChange) route(destination);
+    onSettle(destination, record);
   }
 
-  // Wheel and touch use the very same spring, flick continuation, reversal and
-  // visible-area settling as Home ↔ Portfolio. Clicks retain their own timeline.
   function beginGesture(from) {
-    if (destroyed || gesture || (from === 0 ? phase !== 'closed' : phase !== 'about')) return;
+    if (destroyed || gesture || (from === 0 ? phase !== 'closed' : phase !== 'settled')) return;
     const motion = createTransitionMotion({ travel });
     motion.goTo(from);
     motion.update(performance.now(), 0, true);
     const current = gesture = { motion, from, position: from, seconds: 0,
       mode: from, modeTarget: from, lastAt: 0, lastDirection: 0, touch: null };
     setPhase('preparing');
-    layer.inert = true;
-    onOwnershipChange(true);
     (async () => {
       if (from === 0) {
-        await prepare();
+        await scene.load();
         if (destroyed || gesture !== current) return;
         layer.scrollTop = 0;
-        page.setActive(true);
+        scene.setVisible(true);
         draw(0, 0, 0);
         layer.classList.add('is-shown');
       } else {
-        // Keep About fully painted while its destination is prepared below it.
-        await prepareDestination('portfolio');
+        // Keep the page fully painted while its destination is prepared below it.
+        await showUnder(above);
       }
       await nextPaint();
       if (destroyed || gesture !== current) return;
@@ -141,17 +107,17 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
           tailDirection = current.lastDirection;
           tailUntil = now + 220;
           const changed = current.position !== from;
-          if (current.position === 1) finishAbout(changed);
-          else finishHost('portfolio', changed);
+          if (current.position === 1) finishPage(changed);
+          else finishHost(above, changed);
         } else animation = requestAnimationFrame(frame);
       }
       animation = requestAnimationFrame(frame);
     })().catch(error => {
       if (destroyed || gesture !== current) return;
-      console.error('About gesture:', error);
+      console.error(`${view.id} gesture:`, error);
       gesture = null;
       draw(from, 0, from);
-      if (from) finishAbout(false); else finishHost('portfolio', false);
+      if (from) finishPage(false); else finishHost(above, false);
     });
   }
 
@@ -177,7 +143,7 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
       function frame(now) {
         const t = duration ? Math.min(1, (now - start) / duration) : 1;
         const progress = t * t * (3 - 2 * t), seconds = (now - start) / 1000;
-        if (!fire?.supported || reduced()) {
+        if (!curtain.supported || reduced()) {
           layer.style.clipPath = '';
           layer.style.opacity = entering ? progress : 1 - progress;
         } else {
@@ -186,13 +152,11 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
           const position = entering ? progress : 1 - progress;
           const edge = FIRE_EDGE.hidden + (FIRE_EDGE.full - FIRE_EDGE.hidden) * position;
           layer.style.clipPath = portraitClip(edge, seconds);
-          fire.set({ edge, mode: entering ? 0 : 1, life: 1 });
-          fire.render(seconds);
+          render(edge, entering ? 0 : 1, seconds);
         }
         if (t < 1 && !destroyed) animation = requestAnimationFrame(frame);
         else {
-          fire?.set({ edge: entering ? FIRE_EDGE.full : FIRE_EDGE.hidden, opening: 0 });
-          fire?.render(seconds);
+          if (curtain.supported) render(entering ? FIRE_EDGE.full : FIRE_EDGE.hidden, entering ? 0 : 1, seconds);
           animation = 0; cancelAnimation = null; resolve();
         }
       }
@@ -200,15 +164,14 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
     });
   }
 
-  async function open({ instant = false, historyChange = true } = {}) {
+  async function open({ instant = false, record = true } = {}) {
     if (phase !== 'closed' || destroyed || !canNavigate()) return;
     setPhase('preparing');
-    onOwnershipChange(true);
     try {
-      await prepare();
+      await scene.load();
       if (destroyed) return;
       layer.scrollTop = 0;
-      page.setActive(true);
+      scene.setVisible(true);
       layer.style.clipPath = portraitClip(FIRE_EDGE.hidden, 0);
       layer.style.opacity = '1';
       layer.classList.add('is-shown');
@@ -216,44 +179,34 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
       setPhase('entering');
       await animate(true, instant);
       if (destroyed) return;
-      finishAbout(historyChange);
+      finishPage(record);
     } catch (error) {
-      console.error('About passage:', error);
+      console.error(`${view.id} passage:`, error);
       layer.classList.remove('is-shown');
-      page?.setActive(false);
+      scene.setVisible(false);
       setPhase('closed');
-      onOwnershipChange(false);
     }
   }
 
-  async function leave(destination = 'portfolio', { historyChange = true } = {}) {
-    if (phase !== 'about' || destroyed) return;
+  async function leave(destination = above, { record = true } = {}) {
+    if (phase !== 'settled' || destroyed) return;
     setPhase('leaving');
-    layer.inert = true;
     try {
-      // About stays opaque until the destination is fully ready underneath.
-      await prepareDestination(destination);
+      // The page stays opaque until the destination is fully ready underneath.
+      await showUnder(destination);
       await nextPaint();
       await animate(false);
       if (destroyed) return;
-      finishHost(destination, historyChange);
+      finishHost(destination, record);
       tailUntil = performance.now() + 300;
       tailDirection = 0;
     } catch (error) {
-      console.error('About return:', error);
-      layer.inert = false;
+      console.error(`${view.id} return:`, error);
       layer.style.clipPath = '';
       layer.style.opacity = '';
-      setPhase('about');
+      setPhase('settled');
     }
   }
-
-  link?.addEventListener('pointerenter', () => { prepare().catch(() => {}); }, { signal });
-  link?.addEventListener('focus', () => { prepare().catch(() => {}); }, { signal });
-  link?.addEventListener('click', event => {
-    if (!plainClick(event)) return;
-    event.preventDefault(); open();
-  }, { signal });
 
   window.addEventListener('wheel', event => {
     if (event.ctrlKey || event.metaKey || !event.deltaY) return;
@@ -270,7 +223,7 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
       return;
     }
     if (phase === 'closed') return;
-    if (phase !== 'about') { event.preventDefault(); return; }
+    if (phase !== 'settled') { event.preventDefault(); return; }
     if (now - lastWheel > 220) atTopGesture = layer.scrollTop <= 1;
     lastWheel = now;
     if (layer.scrollTop > 1 || pixels > 0) return;
@@ -287,7 +240,7 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
       gesture.touch = { y: event.touches[0].clientY, position: gesture.motion.hold() };
       return;
     }
-    finger = phase === 'about' && layer.contains(event.target) && layer.scrollTop <= 1 && event.touches.length === 1
+    finger = phase === 'settled' && layer.contains(event.target) && layer.scrollTop <= 1 && event.touches.length === 1
       ? event.touches[0].clientY : null;
   }, { signal, capture: true, passive: true });
   window.addEventListener('touchmove', event => {
@@ -297,7 +250,7 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
       dragGesture(event.touches[0].clientY, performance.now());
       return;
     }
-    if (finger === null || phase !== 'about' || layer.scrollTop > 1) return;
+    if (finger === null || phase !== 'settled' || layer.scrollTop > 1) return;
     const pull = event.touches[0].clientY - finger;
     if (pull <= 0) return;
     event.preventDefault(); event.stopImmediatePropagation();
@@ -312,40 +265,33 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
   }, { signal, capture: true, passive: true });
   layer.addEventListener('keydown', event => {
     if (event.target.closest('input, textarea, [contenteditable]') || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (phase === 'about' && layer.scrollTop <= 1 && ['ArrowUp', 'PageUp'].includes(event.key)) {
-      event.preventDefault(); leave('portfolio');
+    if (phase === 'settled' && layer.scrollTop <= 1 && ['ArrowUp', 'PageUp'].includes(event.key)) {
+      event.preventDefault(); leave(above);
     }
   }, { signal });
 
-  window.addEventListener('popstate', async () => {
-    if (!canNavigate()) return;
-    const view = viewFromPath(location.pathname);
-    if (view === 'about') open({ historyChange: false });
-    else if (phase === 'about') leave(view === 'portfolio' ? 'portfolio' : 'home', { historyChange: false });
-    else if (phase === 'closed') await prepareDestination(view === 'portfolio' ? 'portfolio' : 'home');
-  }, { signal });
-
   return {
+    view,
     get active() { return phase !== 'closed'; },
-    get settled() { return phase === 'about'; },
-    preload() { prepare().catch(() => {}); },
+    get settled() { return phase === 'settled'; },
+    preload() { scene.load().catch(() => {}); },
     open,
-    scrollFromPortrait(pixels, now) {
+    leave,
+    /** Wheel past the end of the stage: begins (or continues) the gesture in. */
+    scrollFrom(pixels, now) {
       if (phase === 'closed') beginGesture(0);
       scrollGesture(pixels, now);
     },
-    dragFromPortrait(startY, y, now) {
+    /** Touch pull past the end of the stage. */
+    dragFrom(startY, y, now) {
       if (phase === 'closed') beginGesture(0);
       if (!gesture) return;
       gesture.touch = { y: startY, position: gesture.motion.hold() };
       dragGesture(y, now);
     },
-    syncRoute(view) {
-      if (phase === 'closed') route(view);
-    },
     destroy() {
       destroyed = true; gesture = null; controller.abort(); cancelAnimationFrame(animation); cancelAnimation?.();
-      page?.destroy(); fire?.destroy(); layer.remove(); delete html.dataset.pagePassage;
+      scene.destroy(); delete html.dataset.pagePassage;
     },
   };
 }

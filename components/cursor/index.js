@@ -1,1 +1,1 @@
-export { initCursor } from "./cursor.js?v=43";
+export { initCursor } from "./cursor.js";

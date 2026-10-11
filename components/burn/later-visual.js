@@ -2,7 +2,7 @@
 // has fully faded; its spent hold keeps healing holes open instead of
 // resurfacing half-healed rings of sheet.
 
-import { REIGNITE_GLSL } from "./reignite-visual.js?v=1";
+import { REIGNITE_GLSL } from "./reignite-visual.js";
 
 export const LATER_COMPOSITE_FS = `
 precision highp float;

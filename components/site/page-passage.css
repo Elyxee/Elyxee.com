@@ -1,5 +1,5 @@
-/* Live About content shares the same viewport and combustion edge as Portfolio. */
-.page-passage__about {
+/* A page view (About, …) shares the viewport and combustion edge with the stage. */
+.page-layer {
   position: fixed;
   inset: 0;
   z-index: 20010;
@@ -11,22 +11,14 @@
   background: #050403;
   outline: none;
 }
-.page-passage__about.is-shown { visibility: visible; }
-#page-passage-fire {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 20011;
-  pointer-events: none;
-  display: none;
-}
-#page-passage-fire.is-live { display: block; }
+.page-layer.is-shown { visibility: visible; }
+/* While a page passage runs, the one fire curtain draws above the page layer. */
+html[data-page-passage] #stage-fire { z-index: 20011; }
 html[data-page-passage] #cursor-fx,
 html[data-page-passage] #stage-cursor { visibility: hidden; }
 @media (hover: hover) and (pointer: fine) {
-  html.cursor-ready .page-passage__about,
-  html.cursor-ready .page-passage__about * { cursor: auto !important; }
-  html.cursor-ready .page-passage__about :is(a, button) { cursor: pointer !important; }
-  html.cursor-ready .page-passage__about :is(input, textarea) { cursor: text !important; }
+  html.cursor-ready .page-layer,
+  html.cursor-ready .page-layer * { cursor: auto !important; }
+  html.cursor-ready .page-layer :is(a, button) { cursor: pointer !important; }
+  html.cursor-ready .page-layer :is(input, textarea) { cursor: text !important; }
 }

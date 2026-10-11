@@ -1,4 +1,4 @@
-import { ABOUT_CONTENT } from './content.js?v=3';
+import { ABOUT_CONTENT } from './content.js';
 import { mountPortraitLight } from './lighting.js';
 
 let instance = 0;
@@ -10,6 +10,7 @@ const clamp = value => Math.max(0, Math.min(1, value));
  * onNavigate({ destination, href, event }) may return false to prevent navigation.
  * scrollRoot accepts window or an overflow scroll element; external hosts can
  * disable observeScroll and drive setProgress(0..1) themselves.
+ * `ready` resolves once the fonts and the photographs can be painted.
  */
 export function mountAbout({ root, content = {}, onSubscribe, onNavigate,
   lighting = true, scrollRoot = window, observeScroll = true } = {}) {
@@ -153,8 +154,13 @@ export function mountAbout({ root, content = {}, onSubscribe, onNavigate,
     }
   }, { signal });
   if (observeScroll) schedule();
+  const ready = Promise.allSettled([
+    document.fonts.ready,
+    ...[...page.querySelectorAll('.about-hero__photo img, .about-scene__texture')].map(image => image.decode()),
+  ]);
   return {
     root: page,
+    ready,
     setProgress,
     setLightPosition: position => light?.setPosition(position),
     setActive(value) {

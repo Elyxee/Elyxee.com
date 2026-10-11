@@ -1,84 +1,83 @@
-// Site orchestration: opening fire, the scroll-driven passage between the burn
-// scene and the Dust & Space portrait, and the cursor handoff between them.
+// Site coordinator: the opening, which view is current, which view receives
+// input, the address bar, and the passages between views.
 //
-// Both scenes are mounted exactly as their own pages mount them. This file
-// never reaches into either simulation; it stacks the two as layers, drives a
-// single stage progress value (0 = burn, 1 = portrait) from scroll input, and
-// reveals the arriving layer behind one continuous, rising fire front.
+//   views.js          what the views are: paths, titles, how each is reached
+//   scenes.js         one small contract for every scene (load / setVisible /
+//                     setActive / destroy), adapting each module's own API
+//   stage-passage.js  Home ↔ Portfolio: one progress value, one fire seam
+//   page-passage.js   page views (About) opening over the stage
+//   router.js         the address bar
+//
+// The effects live in their own modules and are never reached into from here.
 
-import { createAboutPassage } from "./page-passage.js?v=9";
-import { initBurn } from "../burn/index.js?v=85";
-import { initCursor } from "../cursor/index.js?v=43";
-import { initBurnTypography } from "../burn/type/typography.js?v=80";
-import { initBurnSocials } from "../burn/socials.js?v=84";
-import { mountPortrait } from "../portrait/mount.js?v=10";
-import { createFireCurtain, edgeHeightAt, FIRE_EDGE } from "./fire-curtain.js?v=11";
+import { initBurn } from "../burn/index.js";
+import { initCursor } from "../cursor/index.js";
+import { initBurnTypography } from "../burn/type/typography.js";
+import { initBurnSocials } from "../burn/socials.js";
+import { mountPortrait } from "../portrait/mount.js";
+import { createFireCurtain } from "./fire-curtain.js";
 import { waitForOpening } from "./opening-ready.js";
-import { createCursorHandoff } from "./cursor-handoff.js?v=5";
-import { createDepthLens } from "./depth-lens.js?v=3";
-import { createTransitionMotion } from "./transition-motion.js?v=5";
-import { portraitClip, portraitShare } from "./transition-front.js?v=2";
+import { createCursorHandoff } from "./cursor-handoff.js";
+import { createDepthLens } from "./depth-lens.js";
+import { createHomeScene, createPortfolioScene, createPageScene } from "./scenes.js";
+import { createStagePassage } from "./stage-passage.js";
+import { createPagePassage } from "./page-passage.js";
+import { createRouter, viewFromPath } from "./router.js";
+import { VIEWS, viewById, viewAbove, planNavigation } from "./views.js";
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const lerp = (a, b, t) => a + (b - a) * t;
-const ease = t => t * t * (3 - 2 * t);
 const easeInOut = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const smoothstep = (a, b, x) => ease(clamp((x - a) / (b - a), 0, 1));
+const plainClick = event => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 
-const STAGE = Object.freeze({
-  // Slow scrubbing spans this distance; a purposeful flick carries onward.
-  travel: 620,
-  // Pull-back of the scene being left, and the arrival dolly of the next.
-  // The pull-back leads: it is mostly done before the fire climbs into view.
-  burnPullBack: 0.075,
-  portraitPullBack: 0.05,
-  pullBackSpan: 0.65,
-  // Opening: apparition, minimum hold, then the source-aligned landscape reveal.
+const OPENING = Object.freeze({
+  // Apparition, minimum hold, then the source-aligned landscape reveal.
   igniteSeconds: 0.7,
   minIntroMs: 1500,
   recedeSeconds: 2.4,
 });
 
 const html = document.documentElement;
+const hostTitle = document.title;
 const burnLayer = document.querySelector(".stage--burn");
 const portraitLayer = document.querySelector(".stage--portrait");
 const portraitRoot = portraitLayer.querySelector(".portrait");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-// A fresh load always completes the opening on Home. In-document history can
-// still revisit scenes; a /portfolio or /about URL (or an old ?view= link)
-// must not skip the opening.
-const entryUrl = new URL(location.href);
-if (entryUrl.pathname !== '/' || entryUrl.searchParams.has('view')) {
-  entryUrl.pathname = '/';
-  entryUrl.searchParams.delete('view');
-  history.replaceState({ view: 'home' }, '', entryUrl);
-}
-let aboutPassage;
+const router = createRouter({ onNavigate: id => onHistory(id) });
 
-// --- pointer gate ----------------------------------------------------------
-// Registered before any module so it runs first on document. While the
-// portrait layer is on screen the burn scene's pointer listeners (burn, flame
-// cursor, inscription) are held back: the sheet must not keep burning under a
-// page nobody can see, and it must come back exactly as it was left.
+// --- state -------------------------------------------------------------------
+let intro = { phase: "hold", t: 0, life: 0 };
+let inputEnabled = false;
+let current = "home";   // the view the site last settled on
+let owner = "home";     // the view receiving input; null while a page passage runs
+let pageWasActive = false;
+let touch = null;       // active touch pull on the stage, see input below
+let loadingWheelUntil = 0;
+let previousFrameAt = performance.now();
+const preloadQueued = new Set();
+
+// --- pointer gate ------------------------------------------------------------
+// Registered before any scene so it runs first on document. Home's pointer
+// listeners (burn, flame cursor, inscription) only hear the pointer while Home
+// owns input: the sheet must not keep burning under a view nobody can see, and
+// it must come back exactly as it was left. A slow opening must not accumulate
+// invisible burns before Home is ready.
 const handoff = createCursorHandoff();
-let portraitShown = false;
 let pointerType = "mouse";
 document.addEventListener("pointermove", event => {
   if (event.pointerType !== "touch") {
     handoff.setPointer(event.clientX, event.clientY);
     pointerType = event.pointerType;
   }
-  // A slow opening must not accumulate invisible burns before Home is ready.
-  if (html.dataset.stage === 'intro' || portraitShown || aboutPassage?.active) event.stopImmediatePropagation();
+  if (intro || owner !== "home") event.stopImmediatePropagation();
 });
 
-// --- fire curtain and opening ----------------------------------------------
+// --- curtain and opening -------------------------------------------------------
 const curtain = createFireCurtain();
 curtain.set({ opening: 1, reveal: 0, life: 0 });
 const depth = createDepthLens(burnLayer, portraitLayer);
 html.dataset.stage = "intro";
 
-// --- burn scene, exactly as index.html mounted it --------------------------
+// --- Home, mounted with the opening --------------------------------------------
 initBurnSocials();
 const burn = initBurn();
 // Material layout remains in viewport coordinates. The full-screen material
@@ -104,140 +103,141 @@ const everythingReady = waitForOpening({
   curtain: curtain.ready,
   decorations: inscriptions,
   fonts: document.fonts.ready,
-  minimumMs: STAGE.minIntroMs,
+  minimumMs: OPENING.minIntroMs,
 });
 
-// --- stage state -------------------------------------------------------------
-let p = 0;          // where the input has put us
-let pv = 0.5;       // what is drawn; starts on the full blaze
-const motion = createTransitionMotion({ travel: STAGE.travel });
-let inputEnabled = false;
-let loadingWheelUntil = 0;
-let intro = { phase: "hold", t: 0, life: 0 };
-let mode = 0, modeTarget = 0, lastEdge = FIRE_EDGE.full;
-let insideFire = false;
-let burnPaused = false;
-let aboutPreloadQueued = false;
-let portrait = null;
-let portraitView = null;
-let touch = null;   // active touch pull, see input below
-let time = 0;
-let previousFrameAt = performance.now();
+// --- scenes and passages -------------------------------------------------------
+const scenes = {
+  home: createHomeScene({ layer: burnLayer, burn }),
+  portfolio: createPortfolioScene({
+    layer: portraitLayer,
+    root: portraitRoot,
+    pointer: () => ({ ...handoff.pointer, type: pointerType }),
+    mount: () => mountPortrait({ root: portraitRoot, scene: 1, onHome: () => navigate("home") }),
+  }),
+};
+const stage = createStagePassage({ burnLayer, portraitLayer, portraitRoot, curtain, depth, handoff, reduced });
+const STAGE_END = VIEWS.find(view => view.passage === "stage" && view.position === 1);
 
-function visuals(progress) {
-  const burnScale = 1 - STAGE.burnPullBack * ease(clamp(progress / STAGE.pullBackSpan, 0, 1));
-  const portraitScale = 1 - STAGE.portraitPullBack * ease(clamp((1 - progress) / STAGE.pullBackSpan, 0, 1));
-  // One ascending passage: the portrait is revealed in the fire's wake.
-  const edge = lerp(FIRE_EDGE.hidden, FIRE_EDGE.full, progress);
-  const dim = 0.025 * Math.pow(Math.sin(progress * Math.PI), 2);
-  return { burnScale, portraitScale, edge, dim };
+// Page passages register their own input listeners first, so that while one
+// runs it hears the wheel before the stage does.
+const pages = {};
+for (const view of VIEWS.filter(view => view.passage === "page")) {
+  scenes[view.id] = createPageScene({
+    view,
+    onNavigate({ destination, event }) {
+      if (!plainClick(event)) return;
+      navigate(destination);
+      return false;
+    },
+  });
+  pages[view.id] = createPagePassage({
+    view,
+    scene: scenes[view.id],
+    above: viewAbove(view.id),
+    curtain,
+    showUnder,
+    canNavigate: () => inputEnabled,
+    onChange: pageChanged,
+    onSettle: (id, record) => settle(id, { record }),
+  });
+}
+const activePage = () => Object.values(pages).find(page => page.active) ?? null;
+
+// --- views, input ownership and the address bar ----------------------------------
+function desiredOwner() {
+  const page = activePage();
+  if (page) return page.settled ? page.view.id : null;
+  if (intro) return "home";
+  return stage.position >= 0.5 ? "portfolio" : "home";
 }
 
-function syntheticPointer(type) {
-  if (!handoff.pointer.seen) return;
-  const init = {
-    bubbles: type !== "pointerleave",
-    clientX: handoff.pointer.x,
-    clientY: handoff.pointer.y,
-    pointerType,
-    isPrimary: true,
-  };
-  try {
-    portraitRoot.dispatchEvent(new PointerEvent(type, init));
-  } catch {
-    // PointerEvent construction can fail on very old engines; the portrait
-    // then simply waits for the next real movement.
-  }
+// Input changes owner as the seam passes the middle, while both views can
+// still be visible; a page passage holds it until it settles.
+function syncOwner() {
+  const next = desiredOwner();
+  if (next === owner) return;
+  owner = next;
+  for (const [id, scene] of Object.entries(scenes)) scene.setActive(id === owner);
 }
 
-function swapLayers(toPortrait) {
-  portraitShown = toPortrait;
-  portraitLayer.inert = !toPortrait;
-  portraitLayer.setAttribute("aria-hidden", String(!toPortrait));
-  burnLayer.inert = toPortrait;
-  burnLayer.setAttribute("aria-hidden", String(toPortrait));
-  if (toPortrait) {
-    // Input changes owner while both pages can still be visible.
-    burn.setPointerActive?.(false);
-    // The portrait's own presence starts from the pointer's current place.
-    syntheticPointer("pointermove");
-  } else {
-    syntheticPointer("pointerleave");
-  }
+function pageChanged() {
+  const active = Boolean(activePage());
+  if (active !== pageWasActive) { pageWasActive = active; touch = null; }
+  syncOwner();
 }
 
+function settle(id, { record = true } = {}) {
+  current = id;
+  document.title = viewById(id)?.title ?? hostTitle;
+  if (record) router.record(id);
+}
+
+/** Puts a stage view underneath, at once, before a page passage reveals it. */
+async function showUnder(id) {
+  await scenes[id].load();
+  stage.jump(viewById(id).position);
+  apply(0);
+}
+
+function goTo(position, options) {
+  if (!inputEnabled || activePage() || stage.input === position) return false;
+  stage.goTo(position, options);
+  return true;
+}
+
+/** Every click, key and link navigation goes through here. */
+function navigate(id, { via = "click" } = {}) {
+  const page = activePage();
+  const plan = planNavigation(id, { page: page && { id: page.view.id, settled: page.settled }, via });
+  if (plan.action === "open") { pages[plan.page].open(); return true; }
+  if (plan.action === "leave") { pages[plan.page].leave(plan.to); return true; }
+  if (plan.action === "goto") return goTo(plan.position, plan.timing);
+  return false;
+}
+
+/** Back and Forward. */
+function onHistory(id) {
+  if (!inputEnabled) return;
+  const page = activePage();
+  const plan = planNavigation(id, { page: page && { id: page.view.id, settled: page.settled }, via: "history" });
+  if (plan.action === "open") pages[plan.page].open({ record: false });
+  else if (plan.action === "leave") pages[plan.page].leave(plan.to, { record: false });
+  else if (plan.action === "jump") showUnder(id).catch(error => console.error("History:", error));
+}
+
+function preload(id) {
+  if (!id || preloadQueued.has(id)) return;
+  preloadQueued.add(id);
+  // Prepared once the stage has arrived, so its setup never lands in the
+  // middle of the passage.
+  const run = () => pages[id].preload();
+  if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 600 });
+  else setTimeout(run, 200);
+}
+
+// --- frame -------------------------------------------------------------------
 function apply(dt) {
-  const v = visuals(pv);
-  const wantPortrait = !intro && pv >= 0.5;
-  if (wantPortrait !== portraitShown) swapLayers(wantPortrait);
+  const page = activePage();
+  syncOwner();
+  stage.render(dt, { intro, curtainBusy: Boolean(page), cold: owner === "portfolio" && scenes.portfolio.coldPointer });
 
+  const pv = stage.position;
   if (!intro) {
-    portraitLayer.classList.toggle('is-shown', pv > 0);
-    burnLayer.classList.toggle('is-hidden', pv >= 1);
-    portraitLayer.style.clipPath = pv > 0 && pv < 1 ? portraitClip(v.edge, time) : '';
-    // The incoming scene rises gently into place with enough overscan to keep
-    // its edges full-bleed. Its own layout and pointer coordinates resume at 1.
-    const arrival = reduced.matches ? 0 : 1 - ease(pv);
-    portraitRoot.style.transform = pv > 0 && pv < 1
-      ? `translateY(${(arrival*3).toFixed(3)}vh) scale(${(1+arrival*.06).toFixed(5)})` : '';
-    html.style.setProperty('--burn-pointer-opacity', 1-smoothstep(.12,.46,pv));
-    const shouldPause = pv >= 1 || aboutPassage?.settled;
-    if (shouldPause !== burnPaused) {
-      burnPaused = shouldPause;
-      if (shouldPause) burn.pause?.(); else burn.resume?.();
-    }
-    // The portrait draws only while some of it is on screen: not under Home,
-    // and not under a settled About page.
-    portraitView?.effect?.setVisible(pv > 0 && !aboutPassage?.settled);
+    // A scene that is fully covered keeps its state but stops drawing.
+    scenes.home.setVisible(!(pv >= 1 || page?.settled));
+    scenes.portfolio.setVisible(pv > 0 && !page?.settled);
   }
 
-  depth.set(intro || reduced.matches ? 0 : 1 - v.burnScale,
-    intro || reduced.matches ? 0 : 1 - v.portraitScale);
-
-  // Climbing fire leads with flames; sinking fire leads with soot and ash.
-  const edgeVelocity = dt > 0 ? (v.edge - lastEdge) / dt : 0;
-  lastEdge = v.edge;
-  if (Math.abs(edgeVelocity) > 0.03) modeTarget = edgeVelocity < 0 ? 1 : 0;
-  mode += (modeTarget - mode) * (1 - Math.exp(-dt * 6));
-  curtain.set({ edge: v.edge, mode, dim: v.dim, life: intro ? intro.life : 1,
-    opening: intro ? 1 : 0, reveal: intro ? intro.t : 1 });
-  curtain.render(time);
-  // First fire frame is up; the burn scene may now sit beneath it.
-  if (intro && intro.phase === "hold" && burnLayer.classList.contains("is-hidden") && curtain.visible) {
-    burnLayer.classList.remove("is-hidden");
+  const view = page?.settled ? page.view.id : intro ? "intro" : pv <= 0.02 ? "burn" : pv >= 0.98 ? "portrait" : "transit";
+  if (html.dataset.stage !== view) html.dataset.stage = view;
+  if (view === "portrait") preload(STAGE_END.below);
+  // Whichever way a stage view is reached (click, wheel, touch, keys), the
+  // address follows once the passage settles, so Back returns to the last one.
+  if (!page && (view === "burn" || view === "portrait")) {
+    const id = view === "portrait" ? "portfolio" : "home";
+    if (id !== current) settle(id);
   }
-
-  const stage = aboutPassage?.settled ? "about" : intro ? "intro" : pv <= 0.02 ? "burn" : pv >= 0.98 ? "portrait" : "transit";
-  if (html.dataset.stage !== stage) html.dataset.stage = stage;
-  // About's layer and its WebGL contexts are prepared once Portfolio has
-  // arrived, so that setup never lands in the middle of the passage.
-  if (stage === "portrait" && !aboutPreloadQueued) {
-    aboutPreloadQueued = true;
-    const preload = () => aboutPassage.preload();
-    if (window.requestIdleCallback) requestIdleCallback(preload, { timeout: 600 });
-    else setTimeout(preload, 200);
-  }
-  // Whichever way a view is reached (click, wheel, touch), the address follows
-  // once the passage settles, so Back returns to the previous view.
-  if (!aboutPassage?.active && (stage === "burn" || stage === "portrait")) {
-    aboutPassage?.syncRoute(stage === "portrait" ? "portfolio" : "home");
-  }
-
-  // Cursor handoff: a few grains leave the real pointer as the smoke passes.
-  if (handoff.pointer.seen && !intro) {
-    const x = clamp(handoff.pointer.x / Math.max(window.innerWidth, 1), 0, 1);
-    const yUp = 1 - clamp(handoff.pointer.y / Math.max(window.innerHeight, 1), 0, 1);
-    const edgeHere = edgeHeightAt(x, v.edge, curtain.state.bias, time);
-    const nowInside = insideFire ? edgeHere > yUp - 0.03 : edgeHere > yUp + 0.03;
-    if (nowInside !== insideFire) {
-      insideFire = nowInside;
-      if (curtain.visible) handoff.burst({ cold: portraitShown && portraitRoot.dataset.scene === "space" });
-    }
-  } else if (intro) {
-    insideFire = true;
-  }
-  handoff.update(dt);
-  handoff.render();
 }
 
 function frame(now) {
@@ -245,19 +245,18 @@ function frame(now) {
   const elapsed = Math.max(0, (now - previousFrameAt) / 1000);
   const dt = Math.min(elapsed, 0.05);
   previousFrameAt = now;
-  time += dt;
+  stage.tick(dt);
 
   if (intro) {
-    intro.life = Math.min(1, intro.life + dt / STAGE.igniteSeconds);
+    intro.life = Math.min(1, intro.life + dt / OPENING.igniteSeconds);
     if (intro.phase === "recede") {
-      const seconds = reduced.matches ? 0.8 : STAGE.recedeSeconds;
+      const seconds = reduced.matches ? 0.8 : OPENING.recedeSeconds;
       intro.t = Math.min(1, intro.t + dt / seconds);
-      pv = 0.5 * (1 - easeInOut(intro.t));
+      stage.setPosition(0.5 * (1 - easeInOut(intro.t)));
       if (intro.t >= 1) finishIntro();
     }
-  } else if (!aboutPassage?.active) {
-    pv = motion.update(now, elapsed, reduced.matches, portraitShare(pv,time));
-    p = motion.input;
+  } else if (!activePage()) {
+    stage.update(now, elapsed);
   }
 
   apply(dt);
@@ -265,53 +264,14 @@ function frame(now) {
 
 function finishIntro() {
   intro = null;
-  motion.goTo(0);
-  pv = motion.update(performance.now(), 0, true);
-  p = motion.input;
+  stage.jump(0);
   inputEnabled = true;
   // The portrait mounts once the opening is over so its texture work never
   // competes with the receding fire.
   setTimeout(() => {
-    ensurePortrait().catch(error => console.error("Portrait mount:", error));
+    scenes.portfolio.load().catch(error => console.error("Portrait mount:", error));
   }, 350);
 }
-
-function ensurePortrait() {
-  if (!portrait) portrait = mountPortrait({ root: portraitRoot, scene: 1,
-    onHome: () => goTo(0, { omega: 2.7 }),
-  }).then(mounted => {
-    portraitView = mounted;
-    return mounted;
-  });
-  return portrait;
-}
-
-async function prepareDestination(destination) {
-  if (destination === 'portfolio') await ensurePortrait();
-  const target = destination === 'portfolio' ? 1 : 0;
-  motion.goTo(target);
-  pv = motion.update(performance.now(), 0, true);
-  p = motion.input;
-  apply(0);
-  // Both host layers stay noninteractive until the outgoing About seam clears.
-  if (aboutPassage.active) { burnLayer.inert = true; portraitLayer.inert = true; }
-}
-
-aboutPassage = createAboutPassage({
-  link: document.querySelector('.burn-nav a[href="/about"]'),
-  prepareDestination,
-  canNavigate: () => inputEnabled,
-  onOwnershipChange(active) {
-    touch = null;
-    if (active) {
-      burn.setPointerActive?.(false);
-      syntheticPointer('pointerleave');
-      burnLayer.inert = true; portraitLayer.inert = true;
-    } else {
-      swapLayers(pv >= .5);
-    }
-  },
-});
 
 everythingReady.then(() => {
   if (intro) intro.phase = "recede";
@@ -333,20 +293,13 @@ function wheelDelta(event) {
   return Number.isFinite(event.deltaY) ? clamp(event.deltaY * unit, -160, 160) : 0;
 }
 
-function nudge(pixels, now) {
-  motion.scroll(pixels, now);
-  p = motion.input;
-}
-
-function overGallery(event) {
-  return portraitView?.effect?.isGalleryScrollRegion(event.clientX, event.clientY) ?? false;
-}
+const atStageEnd = () => stage.input >= 1 && stage.position >= 0.98;
 
 // Keep one trackpad gesture with its initial owner, even as frames drift under
 // the pointer. A fresh gesture rechecks the active scene's frame/track geometry.
 let wheelOwner = null, lastWheelAt = -Infinity;
 window.addEventListener("wheel", event => {
-  if (aboutPassage.active) return;
+  if (activePage()) return;
   // Leave browser zoom and purely horizontal gestures alone.
   if (event.ctrlKey || event.metaKey) return;
   const dy = wheelDelta(event);
@@ -359,75 +312,73 @@ window.addEventListener("wheel", event => {
     loadingWheelUntil = now + 200;
     return;
   }
-  if (motion.ownsTail(dy, now)) {
+  if (stage.ownsTail(dy, now)) {
     event.preventDefault(); event.stopPropagation();
-    nudge(dy, now); return;
+    stage.scroll(dy, now); return;
   }
-  if (p >= 1 && pv >= 0.98) {
+  if (atStageEnd()) {
     if (event.target.closest?.(".scene-switch, .portrait-home")) return;
     if (!wheelOwner || now - lastWheelAt > 200) {
-      wheelOwner = overGallery(event) ? "gallery" : "stage";
+      wheelOwner = scenes.portfolio.isScrollRegion(event.clientX, event.clientY) ? "gallery" : "stage";
     }
     lastWheelAt = now;
     // Both directions reach the existing gallery handler near its frames or
-    // track. Empty space navigates up to Home or down to About.
+    // track. Empty space navigates up to Home or down to the page below.
     if (wheelOwner === "gallery") return;
     if (dy > 0) {
       event.preventDefault(); event.stopPropagation();
-      aboutPassage.scrollFromPortrait(dy, now);
+      pages[STAGE_END.below].scrollFrom(dy, now);
       return;
     }
   } else {
     wheelOwner = null;
   }
-  if (p <= 0 && dy < 0) { event.preventDefault(); return; }
+  if (stage.input <= 0 && dy < 0) { event.preventDefault(); return; }
   event.preventDefault();
   event.stopPropagation();
-  nudge(dy, now);
+  stage.scroll(dy, now);
 }, { capture: true, passive: false });
 
-function goTo(destination, options) {
-  if (!inputEnabled || aboutPassage.active || p === destination) return false;
-  motion.goTo(destination, options);
-  p = motion.input;
-  return true;
+// Navigation links reuse the existing passages without reloading any state.
+// Modified clicks keep their native behavior (a new tab opens at that path).
+const nav = document.querySelector('.burn-nav');
+nav?.addEventListener('click', event => {
+  const link = event.target.closest('a[href]');
+  if (!link || !plainClick(event)) return;
+  event.preventDefault();
+  navigate(viewFromPath(new URL(link.href).pathname));
+});
+for (const link of nav?.querySelectorAll('a[href]') ?? []) {
+  const id = viewFromPath(new URL(link.href).pathname);
+  if (viewById(id)?.passage !== "page") continue;
+  link.addEventListener('pointerenter', () => pages[id].preload());
+  link.addEventListener('focus', () => pages[id].preload());
 }
 
-// Navigation reuses the existing scene passage without reloading its state.
-document.querySelector('.burn-nav')?.addEventListener('click', event => {
-  const link = event.target.closest('[data-burn-destination]');
-  if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  event.preventDefault();
-  const destination = Number(link.dataset.burnDestination);
-  // Only Home's Portfolio click adopts About's deliberate, symmetric timing.
-  goTo(destination, destination === 1 ? { durationMs: 3200 } : { omega: 2.7 });
-});
-
 window.addEventListener("keydown", event => {
-  if (aboutPassage.active) return;
+  if (activePage()) return;
   if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
   const tag = event.target?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || event.target?.isContentEditable) return;
   let handled = false;
   switch (event.key) {
     case "ArrowDown": case "PageDown": case "End":
-      handled = goTo(1); break;
+      handled = navigate("portfolio", { via: "key" }); break;
     case "ArrowUp": case "PageUp": case "Home":
-      handled = goTo(0); break;
+      handled = navigate("home", { via: "key" }); break;
     case " ":
-      handled = goTo(event.shiftKey ? 0 : 1); break;
+      handled = navigate(event.shiftKey ? "home" : "portfolio", { via: "key" }); break;
   }
   if (handled) event.preventDefault();
 });
 
 // Touch uses the same regions, with ownership fixed at the start of the swipe.
 document.addEventListener("pointerdown", event => {
-  if (aboutPassage.active) return;
+  if (activePage()) return;
   if (!inputEnabled || event.pointerType !== "touch" || !event.isPrimary) return;
   if (event.target.closest?.(".scene-switch, .portrait-home")) return;
-  if (p >= 1 && pv >= 0.98 && overGallery(event)) return;
-  p = motion.hold();
-  touch = { id: event.pointerId, y: event.clientY, p0: p };
+  if (atStageEnd() && scenes.portfolio.isScrollRegion(event.clientX, event.clientY)) return;
+  touch = { id: event.pointerId, y: event.clientY, p0: stage.hold() };
   event.stopPropagation();
 }, { capture: true, passive: true });
 document.addEventListener("pointermove", event => {
@@ -436,16 +387,15 @@ document.addEventListener("pointermove", event => {
   event.stopPropagation();
   if (touch.p0 >= 1 && pulled > 0) {
     const startY = touch.y, now = performance.now();
-    motion.release(now);
-    aboutPassage.dragFromPortrait(startY, event.clientY, now);
+    stage.release(now);
+    pages[STAGE_END.below].dragFrom(startY, event.clientY, now);
     return;
   }
-  motion.drag(touch.p0 + pulled / (STAGE.travel * 0.9), performance.now());
-  p = motion.input;
+  stage.drag(touch.p0 + pulled / (stage.travel * 0.9), performance.now());
 }, { capture: true, passive: true });
 for (const name of ["pointerup", "pointercancel"]) {
   document.addEventListener(name, event => {
-    if (touch && event.pointerId === touch.id) { touch = null; motion.release(performance.now()); }
+    if (touch && event.pointerId === touch.id) { touch = null; stage.release(performance.now()); }
   }, { capture: true, passive: true });
 }
 
@@ -453,8 +403,9 @@ window.addEventListener("pageshow", event => {
   if (event.persisted) location.reload();
 });
 window.addEventListener("pagehide", () => {
-  aboutPassage.destroy();
-  portrait?.then(mounted => mounted.destroy()).catch(() => {});
+  Object.values(pages).forEach(page => page.destroy());
+  scenes.portfolio.destroy();
+  router.destroy();
 }, { once: true });
 
 requestAnimationFrame(frame);

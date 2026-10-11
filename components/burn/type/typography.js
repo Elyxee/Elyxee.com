@@ -1,5 +1,5 @@
-import { TYPE_VERTEX, TYPE_FRAGMENT } from "./material.js?v=76";
-import { createEmberTrail } from "./embers.js?v=74";
+import { TYPE_VERTEX, TYPE_FRAGMENT } from "./material.js";
+import { createEmberTrail } from "./embers.js";
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const ease = x => x * x * (3 - 2 * x);

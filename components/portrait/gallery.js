@@ -2,7 +2,7 @@ import { FRAME_ITEMS } from './gallery-items.js';
 import { COMPOSITION } from './settings.js';
 import { createGallerySequence } from './gallery-sequence.js';
 import { isNearGalleryFrame, isNearGalleryTrack } from './gallery-region.js';
-import { artworkFor, DUST_ARTWORKS, SPACE_ARTWORKS, loadGalleryImage, mountArtwork } from './artworks.js?v=3';
+import { artworkFor, DUST_ARTWORKS, SPACE_ARTWORKS, loadGalleryImage, mountArtwork } from './artworks.js';
 import { createGallerySelection } from './gallery-interaction.js';
 
 const VS = `#version 300 es

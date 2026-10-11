@@ -1,7 +1,7 @@
-import { initPortrait } from './portrait.js?v=6';
+import { initPortrait } from './portrait.js';
 import { FRAME_ITEMS } from './gallery-items.js';
 import { GALLERY_SEQUENCES } from './gallery-sequence.js';
-import { gallerySource } from './artworks.js?v=3';
+import { gallerySource } from './artworks.js';
 
 // Page bootstrap for the Dust & Space study, shared by portrait.html and the
 // merged site. It only wires the existing DOM (scene switch, static fallback

@@ -39,7 +39,7 @@
 - **Home 光标（主要卡顿来源）**：烟雾的 `filter: blur()` 和火星的 `shadowBlur`，Chrome 会在与裁剪区域等大的临时图层里模糊——未裁剪时就是整张 2880×1800 画布，每颗粒子每帧一次。现在每颗粒子先裁剪到自身加模糊范围。逐像素对比：烟雾差异最多 1/255，火星约 0.06% 像素有亚像素差（最大 14/255），粒子本身每次都是随机的。`cursor-handoff.js` 的转场火星同样处理。
 - **看不见时不画**：光标画布被隐藏（Portfolio、About、开场）或在冷态恢复中透明时，只继续模拟、不再绘制。Portfolio 在 Home 下方或 About 上方完全被遮住时，同样只推进状态和水波模拟，跳过全屏合成（`effect.setVisible`）。重新出现的第一帧状态与一直绘制时相同。
 - **燃烧状态采样**：WebGL2 改为像素缓冲 + fence 异步读取，并去掉每次采样后的 `getError()`。Chrome 读取时仍有一次 GPU 进程往返，但每次阻塞从约 90–100 ms 降到约 20 ms；采样间隔和判定逻辑不变。WebGL1 保留原同步读取。
-- **About 预备**：原来在 Home → Portfolio 转场中途创建 About 图层和两个 WebGL 上下文；现在等 Portfolio 到达后空闲时再做，并拆成两个任务。About 自己的火线不再生成只有开场才用的 1920×1080 几何图和预览纹理（`createFireCurtain({ opening: false })`）。
+- **About 预备**：原来在 Home → Portfolio 转场中途创建 About 图层和两个 WebGL 上下文；现在等 Portfolio 到达后空闲时再做。2026-10-11 起 About 与舞台共用同一条火线，不再有第二个火线画布（见 [interfaces.md](interfaces.md)）。
 - 删除无人使用的代码：Burn 每帧测量标题和图标位置并写入四个 CSS 变量（无样式读取）、`data-burn-scene`、`is-recovering`；光标测试页残留的 `#motion-state` / `#test-button` / `body[data-motion]`；`data-figma-node`。
 
 ## 加载

@@ -1,10 +1,10 @@
 import { QUAD_VS, FLUID_FS, COMPOSITE_FS } from './shaders.js';
 import { COMPOSITION, PORTRAIT_SETTINGS } from './settings.js';
 import { createHaloTexture } from './halo.js';
-import { createAtmosphere } from './atmosphere.js?v=2';
+import { createAtmosphere } from './atmosphere.js';
 import { createMorseSignal } from './morse.js';
 import { createPortalSeeds } from './motion.js';
-import { createGallery } from './gallery.js?v=5';
+import { createGallery } from './gallery.js';
 import { bindGalleryInteraction } from './gallery-interaction.js';
 import { galleryWheelDelta } from './gallery-scroll.js';
 
