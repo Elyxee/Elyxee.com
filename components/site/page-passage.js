@@ -5,10 +5,11 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
 // A page view opens over the stage behind the shared fire seam: live content
-// replaces live content. Clicks play a fixed, symmetric timeline; wheel and
-// touch use the same spring, flick continuation, reversal and visible-area
-// settling as Home ↔ Portfolio. While it runs this passage owns the input,
-// including the exit gestures at the top of the page.
+// replaces live content. Clicks play a fixed, symmetric timeline; the wheel
+// uses the same spring, flick continuation, reversal and visible-area settling
+// as Home ↔ Portfolio. Touch never changes view: on touch screens pages are
+// reached and left by tapping links. While it runs this passage owns the
+// input, including the wheel exit at the top of the page.
 //
 // It does not touch the address bar, the title or the stage layers: it tells
 // the coordinator through `onChange()` (any phase change) and
@@ -21,7 +22,7 @@ export function createPagePassage({ view, scene, above, curtain, showUnder, canN
   const controller = new AbortController(), { signal } = controller;
   let phase = 'closed', animation = 0, destroyed = false;
   let lastWheel = -Infinity, atTopGesture = false, tailUntil = 0, tailDirection = 0;
-  let finger = null, cancelAnimation, gesture = null;
+  let cancelAnimation, gesture = null;
   const travel = 620;
 
   function setPhase(value) {
@@ -72,7 +73,7 @@ export function createPagePassage({ view, scene, above, curtain, showUnder, canN
     motion.goTo(from);
     motion.update(performance.now(), 0, true);
     const current = gesture = { motion, from, position: from, seconds: 0,
-      mode: from, modeTarget: from, lastAt: 0, lastDirection: 0, touch: null };
+      mode: from, modeTarget: from, lastAt: 0, lastDirection: 0 };
     setPhase('preparing');
     (async () => {
       if (from === 0) {
@@ -101,7 +102,7 @@ export function createPagePassage({ view, scene, above, curtain, showUnder, canN
         current.mode += (current.modeTarget - current.mode) * (1 - Math.exp(-dt * 6));
         draw(current.position, current.seconds, current.mode);
         const endpoint = current.position === 0 || current.position === 1;
-        if (endpoint && current.position === motion.input && !current.touch) {
+        if (endpoint && current.position === motion.input) {
           gesture = null;
           animation = 0;
           tailDirection = current.lastDirection;
@@ -125,14 +126,6 @@ export function createPagePassage({ view, scene, above, curtain, showUnder, canN
     if (!gesture) return;
     gesture.lastDirection = Math.sign(pixels);
     gesture.motion.scroll(pixels, now);
-  }
-
-  function dragGesture(y, now) {
-    if (!gesture?.touch) return;
-    const before = gesture.motion.input;
-    gesture.motion.drag(gesture.touch.position + (gesture.touch.y - y) / (travel * .9), now);
-    const direction = Math.sign(gesture.motion.input - before);
-    if (direction) gesture.lastDirection = direction;
   }
 
   function animate(entering, instant) {
@@ -235,34 +228,6 @@ export function createPagePassage({ view, scene, above, curtain, showUnder, canN
     }
   }, { signal, capture: true, passive: false });
 
-  window.addEventListener('touchstart', event => {
-    if (gesture && event.touches.length === 1) {
-      gesture.touch = { y: event.touches[0].clientY, position: gesture.motion.hold() };
-      return;
-    }
-    finger = phase === 'settled' && layer.contains(event.target) && layer.scrollTop <= 1 && event.touches.length === 1
-      ? event.touches[0].clientY : null;
-  }, { signal, capture: true, passive: true });
-  window.addEventListener('touchmove', event => {
-    if (event.touches.length !== 1) return;
-    if (gesture?.touch) {
-      event.preventDefault(); event.stopImmediatePropagation();
-      dragGesture(event.touches[0].clientY, performance.now());
-      return;
-    }
-    if (finger === null || phase !== 'settled' || layer.scrollTop > 1) return;
-    const pull = event.touches[0].clientY - finger;
-    if (pull <= 0) return;
-    event.preventDefault(); event.stopImmediatePropagation();
-    beginGesture(1);
-    gesture.touch = { y: finger, position: gesture.motion.hold() };
-    finger = null;
-    dragGesture(event.touches[0].clientY, performance.now());
-  }, { signal, capture: true, passive: false });
-  for (const type of ['touchend', 'touchcancel']) window.addEventListener(type, () => {
-    finger = null;
-    if (gesture?.touch) { gesture.touch = null; gesture.motion.release(performance.now()); }
-  }, { signal, capture: true, passive: true });
   layer.addEventListener('keydown', event => {
     if (event.target.closest('input, textarea, [contenteditable]') || event.ctrlKey || event.metaKey || event.altKey) return;
     if (phase === 'settled' && layer.scrollTop <= 1 && ['ArrowUp', 'PageUp'].includes(event.key)) {
@@ -281,13 +246,6 @@ export function createPagePassage({ view, scene, above, curtain, showUnder, canN
     scrollFrom(pixels, now) {
       if (phase === 'closed') beginGesture(0);
       scrollGesture(pixels, now);
-    },
-    /** Touch pull past the end of the stage. */
-    dragFrom(startY, y, now) {
-      if (phase === 'closed') beginGesture(0);
-      if (!gesture) return;
-      gesture.touch = { y: startY, position: gesture.motion.hold() };
-      dragGesture(y, now);
     },
     destroy() {
       destroyed = true; gesture = null; controller.abort(); cancelAnimationFrame(animation); cancelAnimation?.();

@@ -51,16 +51,17 @@ components/burn/ cursor/ portrait/ about/   各界面自己的效果，调度器
 ## 调度器的规则 `site.js`
 
 - **当前界面**：转场停稳时更新。舞台界面在进度到达两端附近（`data-stage` 为 `burn` / `portrait`）时停稳；页面界面由页面转场通知。
-- **地址栏**：每次停稳到新界面就记录一条历史（`/`、`/portfolio`、`/about`），所以点击、滚轮、触摸、键盘都会更新网址，前进后退能逐个界面退。前进后退本身不再新增记录。任何地址刷新后都回到 Home 并播放开场。
+- **地址栏**：每次停稳到新界面就记录一条历史（`/`、`/portfolio`、`/about`），所以点击、滚轮、键盘都会更新网址，前进后退能逐个界面退。前进后退本身不再新增记录。任何地址刷新后都回到 Home 并播放开场。
 - **谁接收输入**：开场期间和舞台上，Home 与 Portfolio 在火线经过中点时交接；页面转场运行期间没有人接收，直到页面停稳。Home 的鼠标监听只在 Home 拥有输入时才能收到移动（`site.js` 最先注册的指针闸门）。
 - **显隐**：被完全盖住的舞台界面停止绘制（Home 在 Portfolio 或页面之下，Portfolio 在 Home 或页面之下）。
-- **输入路由**：页面转场在舞台之前注册自己的滚轮与触摸监听，运行时先拿到手势；舞台末端的空白处往下滚、往上划，交给 `below` 指定的页面。画框附近的手势留给画廊。
+- **输入路由**：页面转场在舞台之前注册自己的滚轮监听，运行时先拿到手势；舞台末端的空白处往下滚，交给 `below` 指定的页面。画框附近的手势留给画廊。
+- **触摸屏只用点击换界面**：手机、iPad 等用手指时，上下滑动不切换界面（按每次输入是否为手指判断，鼠标、触控板的滚轮照常）。舞台仍接住画框以外的手指滑动，让各场景自己的触摸反应范围不变，只是不再推动进度；About 顶部下拉也不再离开页面。
 
 ## 两种转场
 
-`createStagePassage(...)` 提供 `position / input`、`goTo / jump / scroll / drag / hold / release / ownsTail`、`update(now, elapsed)` 与 `render(dt, { intro, curtainBusy, cold })`。开场期间调度器用 `setPosition()` 直接驱动进度。拉远、裁切、到达位移和光标交接颗粒都在这里。
+`createStagePassage(...)` 提供 `position / input`、`goTo / jump / scroll / ownsTail`、`update(now, elapsed)` 与 `render(dt, { intro, curtainBusy, cold })`。开场期间调度器用 `setPosition()` 直接驱动进度。拉远、裁切、到达位移和光标交接颗粒都在这里。
 
-`createPagePassage({ view, scene, above, curtain, showUnder, canNavigate, onChange, onSettle })` 提供 `active / settled / preload / open / leave / scrollFrom / dragFrom / destroy`。点击使用固定的 3.2 秒对称时间线；滚轮与触摸使用和舞台相同的弹簧、惯性、反向与可见面积判定。它只在 `onChange()`（任何阶段变化）和 `onSettle(viewId, record)`（到达页面，或回到舞台）时通知调度器，需要回到舞台时调用 `showUnder(viewId)` 让目标先在下面就位。
+`createPagePassage({ view, scene, above, curtain, showUnder, canNavigate, onChange, onSettle })` 提供 `active / settled / preload / open / leave / scrollFrom / destroy`。点击使用固定的 3.2 秒对称时间线；滚轮使用和舞台相同的弹簧、惯性、反向与可见面积判定。它只在 `onChange()`（任何阶段变化）和 `onSettle(viewId, record)`（到达页面，或回到舞台）时通知调度器，需要回到舞台时调用 `showUnder(viewId)` 让目标先在下面就位。
 
 两者共用 `createTransitionMotion({ travel })` 与 `transition-front.js` 的火线几何。点击与手势是两种驱动方式，不能为了统一接口把拖动改成固定时长。
 
@@ -132,10 +133,9 @@ WebGL 失败时 `effect` 为空，静态回退仍可切换 Space / Dust。画作
 
 - 模块的 import 语句保持干净（`./burn.js`），不写 `?v=`。`index.html` 里的 import map 给每个模块按内容生成版本号，样式表链接和入口脚本也一样。改完任何模块或样式后运行 `node scripts/stamp-versions.mjs`；忘记运行时 `tests/site/versions.test.mjs` 会失败。
 - `node --test tests/burn/*.test.mjs tests/portrait/*.test.mjs tests/site/*.test.mjs`：单元测试，包括地址栏、界面表、导航决策、素材引用和版本号。
-- `node scripts/check-site.mjs`（需要 Chrome，可加 `--headed` 观看、`--shots 目录` 截图）：在真实浏览器里走一遍所有进出方式，逐步核对网址、界面和报错。
+- `node scripts/check-site.mjs`（需要 Chrome，可加 `--headed` 观看、`--shots 目录` 截图）：在真实浏览器里走一遍所有进出方式，逐步核对网址、界面和报错；触摸部分确认点击能跳转、滑动不会切换。
 
 ## 仍然存在的共享协议
 
 - CSS 依赖 `html[data-stage]`（`intro / burn / transit / portrait / about`）、`html[data-burn-phase]`、`html[data-page-passage]`；文字材质观察 `data-burn-phase`。改动前检查 `site / burn / cursor / portrait` 的 CSS。
-- Home 图层沿用浏览器默认的触摸行为：在 Home 上竖向滑动会被浏览器当作页面手势取消，触摸设备在 Home 用导航进入 Portfolio。Portfolio 与页面图层自己处理触摸。
 - Burn 与光标没有完整的卸载协议（只初始化一次）。

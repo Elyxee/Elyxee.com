@@ -43,7 +43,6 @@ export function createStagePassage({ burnLayer, portraitLayer, portraitRoot, cur
   return {
     get position() { return pv; },
     get input() { return p; },
-    get travel() { return STAGE.travel; },
 
     tick(dt) { time += dt; },
     setPosition(value) { pv = value; },
@@ -60,9 +59,6 @@ export function createStagePassage({ burnLayer, portraitLayer, portraitRoot, cur
     goTo(position, options) { motion.goTo(position, options); p = motion.input; },
     scroll(pixels, now) { motion.scroll(pixels, now); p = motion.input; },
     ownsTail: (pixels, now) => motion.ownsTail(pixels, now),
-    hold() { p = motion.hold(); return p; },
-    drag(progress, now) { motion.drag(progress, now); p = motion.input; },
-    release(now) { motion.release(now); },
 
     /**
      * Draws one frame. `intro` is the opening state while it runs; a busy

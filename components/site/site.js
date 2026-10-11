@@ -50,7 +50,7 @@ let inputEnabled = false;
 let current = "home";   // the view the site last settled on
 let owner = "home";     // the view receiving input; null while a page passage runs
 let pageWasActive = false;
-let touch = null;       // active touch pull on the stage, see input below
+let touch = null;       // active touch on the stage, see input below
 let loadingWheelUntil = 0;
 let previousFrameAt = performance.now();
 const preloadQueued = new Set();
@@ -372,30 +372,24 @@ window.addEventListener("keydown", event => {
   if (handled) event.preventDefault();
 });
 
-// Touch uses the same regions, with ownership fixed at the start of the swipe.
+// On touch screens views change only by tapping links: a vertical swipe would
+// be ambiguous between the scene's own drag and a page change. A swipe on the
+// stage outside the gallery is still claimed here, so the scenes' own touch
+// handling keeps exactly its previous reach; it just no longer moves the stage.
 document.addEventListener("pointerdown", event => {
   if (activePage()) return;
   if (!inputEnabled || event.pointerType !== "touch" || !event.isPrimary) return;
   if (event.target.closest?.(".scene-switch, .portrait-home")) return;
   if (atStageEnd() && scenes.portfolio.isScrollRegion(event.clientX, event.clientY)) return;
-  touch = { id: event.pointerId, y: event.clientY, p0: stage.hold() };
+  touch = { id: event.pointerId };
   event.stopPropagation();
 }, { capture: true, passive: true });
 document.addEventListener("pointermove", event => {
-  if (!touch || event.pointerId !== touch.id) return;
-  const pulled = touch.y - event.clientY; // finger up = positive
-  event.stopPropagation();
-  if (touch.p0 >= 1 && pulled > 0) {
-    const startY = touch.y, now = performance.now();
-    stage.release(now);
-    pages[STAGE_END.below].dragFrom(startY, event.clientY, now);
-    return;
-  }
-  stage.drag(touch.p0 + pulled / (stage.travel * 0.9), performance.now());
+  if (touch && event.pointerId === touch.id) event.stopPropagation();
 }, { capture: true, passive: true });
 for (const name of ["pointerup", "pointercancel"]) {
   document.addEventListener(name, event => {
-    if (touch && event.pointerId === touch.id) { touch = null; stage.release(performance.now()); }
+    if (touch && event.pointerId === touch.id) touch = null;
   }, { capture: true, passive: true });
 }
 

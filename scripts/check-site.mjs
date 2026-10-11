@@ -1,7 +1,8 @@
 // Walks the whole site in a real Chrome and checks, after every step, the
 // address bar, the current view and that nothing logged an error or failed
 // to load. Every way of moving between views is covered: nav clicks, the
-// wheel, keys, touch, Back / Forward, and opening an address directly.
+// wheel, keys, Back / Forward and opening an address directly; on touch, that
+// taps navigate and swipes never change view.
 //
 //   node scripts/check-site.mjs                 headless
 //   node scripts/check-site.mjs --headed        watch it run
@@ -117,9 +118,11 @@ async function open(path) {
   await send('Page.navigate', { url: origin + path });
   await sleep(300);
   for (let i = 0; i < 600; i++) {
-    if (await evaluate(`!!document.querySelector('.portrait.is-ready') && document.documentElement.dataset.stage === 'burn'`).catch(() => false)) return;
+    if (await evaluate(`!!document.querySelector('.portrait.is-ready') && document.documentElement.dataset.stage === 'burn'`).catch(() => false)) break;
     await sleep(100);
   }
+  // Let the portrait finish its first texture work before the first gesture.
+  await sleep(1500);
 }
 async function center(selector) {
   return evaluate(`(() => { const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r && [r.left + r.width / 2, r.top + r.height / 2]; })()`);
@@ -149,8 +152,25 @@ async function swipe(fromY, toY) {
   }
   await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
+async function tap(selector) {
+  const [x, y] = await center(selector);
+  await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
+  await sleep(60);
+  await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+// A swipe that must not change view: wait long enough for any passage to show.
+const swipeStays = (fromY, toY) => async () => { await swipe(fromY, toY); await sleep(2500); };
 const history = step => evaluate(`history.${step}()`);
 const scene = () => evaluate(`document.querySelector('.portrait')?.dataset.scene`);
+// The first switch to Dust also prepares its frames, which can take a while.
+async function switchScene(to) {
+  await click('.scene-switch');
+  for (let i = 0; i < 150; i++) {
+    if (await scene() === to && !await evaluate(`document.querySelector('.scene-switch').disabled`)) return;
+    await sleep(100);
+  }
+  throw new Error(`scene did not switch to ${to === 'dust' ? 'Dust' : 'Space'}`);
+}
 
 // --- the walk -----------------------------------------------------------------------
 const steps = [
@@ -160,12 +180,7 @@ const steps = [
   ['click Portfolio', () => click('.burn-nav a[href="/portfolio"]'), '/portfolio', 'portrait'],
   ['Back', () => history('back'), '/', 'burn'],
   ['Forward', () => history('forward'), '/portfolio', 'portrait'],
-  ['switch to Dust and back', async () => {
-    await click('.scene-switch'); await sleep(3500);
-    if (await scene() !== 'dust') throw new Error('scene did not switch to Dust');
-    await click('.scene-switch'); await sleep(3500);
-    if (await scene() !== 'space') throw new Error('scene did not switch back to Space');
-  }, '/portfolio', 'portrait'],
+  ['switch to Dust and back', async () => { await switchScene('dust'); await switchScene('space'); }, '/portfolio', 'portrait'],
   ['wheel down: Portfolio → About', () => wheel(60, 6), '/about', 'about'],
   ['Back: About → Portfolio', () => history('back'), '/portfolio', 'portrait'],
   ['click Elyxee (Portfolio → Home)', () => click('.portrait-home'), '/', 'burn'],
@@ -178,15 +193,16 @@ const steps = [
   ['click Elyxee in About (About → Home)', () => click('.about-brand'), '/', 'burn'],
   ['open /about/ directly', () => open('/about/'), '/', 'burn'],
   ['open /portfolio?view=about directly', () => open('/portfolio?view=about'), '/', 'burn'],
-  // Home itself leaves vertical swipes to the browser (default touch-action),
-  // which cancels them; the portrait and page layers take touch themselves.
-  ['ArrowDown, then touch emulation on', async () => {
-    await key('ArrowDown');
-    await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-  }, '/portfolio', 'portrait'],
-  ['touch: swipe up, Portfolio → About', () => swipe(700, 250), '/about', 'about'],
-  ['touch: pull down at the top, About → Portfolio', () => swipe(250, 700), '/portfolio', 'portrait'],
-  ['touch: swipe down, Portfolio → Home', () => swipe(300, 750), '/', 'burn'],
+  // Touch screens change view only by tapping links; swipes never do.
+  ['touch emulation on', () => send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }), '/', 'burn'],
+  ['touch: swipe up on Home stays on Home', swipeStays(700, 250), '/', 'burn'],
+  ['touch: tap Portfolio', () => tap('.burn-nav a[href="/portfolio"]'), '/portfolio', 'portrait'],
+  ['touch: swipe up on Portfolio stays', swipeStays(750, 250), '/portfolio', 'portrait'],
+  ['touch: swipe down on Portfolio stays', swipeStays(250, 750), '/portfolio', 'portrait'],
+  ['touch: tap Elyxee (Portfolio → Home)', () => tap('.portrait-home'), '/', 'burn'],
+  ['touch: tap About', () => tap('.burn-nav a[href="/about"]'), '/about', 'about'],
+  ['touch: pull down at the top of About stays', swipeStays(250, 750), '/about', 'about'],
+  ['touch: tap Elyxee in About (About → Home)', () => tap('.about-brand'), '/', 'burn'],
 ];
 
 let failures = 0;
