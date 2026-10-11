@@ -4,6 +4,8 @@
   "workers_dev": true,
   "preview_urls": true,
   "assets": {
-    "directory": "."
+    "directory": ".",
+    // /portfolio and /about are views of the single page: serve index.html.
+    "not_found_handling": "single-page-application"
   }
 }

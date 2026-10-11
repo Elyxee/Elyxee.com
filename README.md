@@ -10,7 +10,7 @@
 python3 -m http.server 4173 --bind 127.0.0.1
 ```
 
-打开 <http://127.0.0.1:4173/>。若已有服务在运行，直接使用原服务。无需构建、安装 npm 包或打开其他 HTML。
+打开 <http://127.0.0.1:4173/>。网址按界面显示为 `/`、`/portfolio`、`/about`；线上由 `wrangler.jsonc` 的 `single-page-application` 让这些路径都返回 `index.html`。本地这个简易服务器只能从 `/` 进入，直接打开 `/about` 会 404。任何路径刷新后都从 Home 开场开始。若已有服务在运行，直接使用原服务。无需构建、安装 npm 包或打开其他 HTML。
 
 ## 文件放在哪里
 

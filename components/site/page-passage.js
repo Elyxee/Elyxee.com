@@ -1,10 +1,14 @@
 import { createFireCurtain } from './fire-curtain.js?v=11';
 import { FIRE_EDGE, portraitClip, portraitShare } from './transition-front.js?v=2';
 import { createTransitionMotion } from './transition-motion.js?v=5';
-import { mountAbout } from '../about/mount.js?v=2';
+import { mountAbout } from '../about/mount.js?v=3';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+// Each view has its own path; Home is the site root.
+const PATHS = { home: '/', portfolio: '/portfolio', about: '/about' };
+export const viewFromPath = pathname =>
+  Object.keys(PATHS).find(view => PATHS[view] === pathname.replace(/\/+$/, '')) ?? 'home';
 const plainClick = event => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 
 // Live content replaces live content behind Portfolio's existing fire seam.
@@ -30,9 +34,7 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
     else html.dataset.pagePassage = phase;
   }
   function route(view, replace = false) {
-    const url = new URL(location.href);
-    if (view === 'home') url.searchParams.delete('view');
-    else url.searchParams.set('view', view);
+    const url = new URL(PATHS[view], location.href);
     if (url.href !== location.href) history[replace ? 'replaceState' : 'pushState']({ view }, '', url);
   }
   function prepare() {
@@ -317,7 +319,7 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
 
   window.addEventListener('popstate', async () => {
     if (!canNavigate()) return;
-    const view = new URL(location.href).searchParams.get('view');
+    const view = viewFromPath(location.pathname);
     if (view === 'about') open({ historyChange: false });
     else if (phase === 'about') leave(view === 'portfolio' ? 'portfolio' : 'home', { historyChange: false });
     else if (phase === 'closed') await prepareDestination(view === 'portfolio' ? 'portfolio' : 'home');
@@ -339,7 +341,7 @@ export function createAboutPassage({ link, prepareDestination, onOwnershipChange
       dragGesture(y, now);
     },
     syncHomeRoute() {
-      if (phase === 'closed' && new URL(location.href).searchParams.get('view') === 'portfolio') route('home', true);
+      if (phase === 'closed' && viewFromPath(location.pathname) === 'portfolio') route('home', true);
     },
     destroy() {
       destroyed = true; gesture = null; controller.abort(); cancelAnimationFrame(animation); cancelAnimation?.();

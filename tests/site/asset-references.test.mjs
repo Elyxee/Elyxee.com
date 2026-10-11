@@ -20,7 +20,7 @@ test('every literal asset path resolves to a file', () => {
   let checked = 0;
   for (const file of ['index.html', 'styles.css', ...sources('components')]) {
     const text = readFileSync(join(root, file), 'utf8');
-    for (const [, path] of text.matchAll(/["'(]((?:\.\.?\/)*Assets\/[^"'()$]+)["')]/g)) {
+    for (const [, path] of text.matchAll(/["'(]((?:\.\.?\/)*\/?Assets\/[^"'()$]+)["')]/g)) {
       // ./ and ../ resolve from the source file; bare paths from the page.
       const resolved = path.startsWith('.') ? join(root, dirname(file), path) : join(root, path);
       checked++;

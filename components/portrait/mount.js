@@ -12,7 +12,7 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
   root.querySelectorAll('img[data-src]').forEach(image => { image.src = image.dataset.src; });
   const home = document.createElement('a');
   home.className = 'portrait-home';
-  home.href = './index.html';
+  home.href = '/';
   home.textContent = 'Elyxee';
   home.setAttribute('aria-label', 'Elyxee home');
   home.addEventListener('click', event => {

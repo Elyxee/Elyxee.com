@@ -1,4 +1,4 @@
-import { ABOUT_CONTENT } from './content.js?v=2';
+import { ABOUT_CONTENT } from './content.js?v=3';
 import { mountPortraitLight } from './lighting.js';
 
 let instance = 0;

@@ -6,12 +6,12 @@
 // single stage progress value (0 = burn, 1 = portrait) from scroll input, and
 // reveals the arriving layer behind one continuous, rising fire front.
 
-import { createAboutPassage } from "./page-passage.js?v=7";
+import { createAboutPassage } from "./page-passage.js?v=8";
 import { initBurn } from "../burn/index.js?v=85";
 import { initCursor } from "../cursor/index.js?v=43";
 import { initBurnTypography } from "../burn/type/typography.js?v=80";
-import { initBurnSocials } from "../burn/socials.js?v=83";
-import { mountPortrait } from "../portrait/mount.js?v=9";
+import { initBurnSocials } from "../burn/socials.js?v=84";
+import { mountPortrait } from "../portrait/mount.js?v=10";
 import { createFireCurtain, edgeHeightAt, FIRE_EDGE } from "./fire-curtain.js?v=11";
 import { waitForOpening } from "./opening-ready.js";
 import { createCursorHandoff } from "./cursor-handoff.js?v=5";
@@ -45,9 +45,11 @@ const portraitLayer = document.querySelector(".stage--portrait");
 const portraitRoot = portraitLayer.querySelector(".portrait");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 // A fresh load always completes the opening on Home. In-document history can
-// still revisit scenes; a previous preview/scene URL must not skip the opening.
+// still revisit scenes; a /portfolio or /about URL (or an old ?view= link)
+// must not skip the opening.
 const entryUrl = new URL(location.href);
-if (entryUrl.searchParams.has('view')) {
+if (entryUrl.pathname !== '/' || entryUrl.searchParams.has('view')) {
+  entryUrl.pathname = '/';
   entryUrl.searchParams.delete('view');
   history.replaceState({ view: 'home' }, '', entryUrl);
 }
@@ -292,7 +294,7 @@ async function prepareDestination(destination) {
 }
 
 aboutPassage = createAboutPassage({
-  link: document.querySelector('.burn-nav a[href="#about"]'),
+  link: document.querySelector('.burn-nav a[href="/about"]'),
   prepareDestination,
   canNavigate: () => inputEnabled,
   onOwnershipChange(active) {

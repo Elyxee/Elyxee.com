@@ -9,7 +9,7 @@ export const ABOUT_CONTENT = Object.freeze({
     'Look around. Take your time. The story is still being written.',
   ],
   email: 'Eliyah@elyxee.com',
-  homeHref: './index.html',
+  homeHref: '/',
   heroSrc: new URL('../../Assets/About/reading-book-repaired.png', import.meta.url).href,
   // Original pixels are intact; only the missing book corner extends right.
   // layoutWidth retains the original person's exact display scale and position.
