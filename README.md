@@ -4,13 +4,13 @@
 
 ## 本地查看
 
-在项目目录运行：
+在项目目录运行（需要 Node.js）：
 
 ```sh
-python3 -m http.server 4173 --bind 127.0.0.1
+node scripts/serve.mjs
 ```
 
-打开 <http://127.0.0.1:4173/>。网址按界面显示为 `/`、`/portfolio`、`/about`；线上由 `wrangler.jsonc` 的 `single-page-application` 让这些路径都返回 `index.html`。本地这个简易服务器只能从 `/` 进入，直接打开 `/about` 会 404。任何路径刷新后都从 Home 开场开始。若已有服务在运行，直接使用原服务。无需构建、安装 npm 包或打开其他 HTML。
+打开 <http://127.0.0.1:4173/>。网址按界面显示为 `/`、`/portfolio`、`/about`；这个本地服务器和线上一样（`wrangler.jsonc` 的 `single-page-application`），直接打开这些路径也会返回网站，任何路径刷新后都从 Home 开场开始。想用手机在同一 Wi‑Fi 下看：`HOST=0.0.0.0 node scripts/serve.mjs`，再用电脑的局域网地址打开。无需构建或安装 npm 包。
 
 ## 文件放在哪里
 

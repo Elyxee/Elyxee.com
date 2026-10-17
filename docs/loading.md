@@ -63,3 +63,12 @@
 | Portfolio 就绪 | 24.1 s | 20.7 s |
 
 逐场景截图对比（Home、燃烧、转场、Space、Dust、About、返回）无可见差异，控制台无错误。57 项测试通过，新增 `tests/site/asset-references.test.mjs` 检查所有素材引用都存在。定档基准 `frozen-files.json` 未更新，需确认效果后再更新。
+
+# Portfolio 加载体验 · 2026-10-17
+
+- 线上实测（未限速）：进入 Home 6.7 秒，Portfolio 完全准备好 20.3 秒。Portfolio 约 31 MB，进入 Home 后要再等十几秒；这段时间进入 Portfolio 会看到下载中的图片。
+- Home 自己的图片和火线纹理一到，开场剩下的时间就开始在后台下载 Portfolio（先 Space，后 Dust），只下载不绘制，开场时间不变。17 Mbps 下 Portfolio 准备好从 23.6 秒提前到 20.6 秒，总下载量不变（43 MB），后台下载被直接复用。
+- 加载期间的静态构图不再显示下载到一半的图片：背景、人像、画框各自完整到达后淡入（0.6 秒）；动态画面准备好后以 0.6 秒淡入接替。
+- 切换场景后，Elyxee 链接与切换按钮一起以 0.8 秒淡入（原来链接直接出现、按钮 0.4 秒）。
+- 本地预览改用 `node scripts/serve.mjs`，与线上一样支持直接打开 `/portfolio`、`/about`。
+

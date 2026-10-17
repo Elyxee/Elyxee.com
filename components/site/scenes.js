@@ -44,8 +44,9 @@ export function createHomeScene({ layer, burn }) {
  * Portfolio: the Dust & Space portrait, mounted after the opening. `pointer()`
  * returns the last real pointer ({ x, y, seen, type }) so that the portrait's
  * own presence starts from where the pointer already is when it takes input.
+ * `prefetch()` downloads its images ahead of the mount, without drawing.
  */
-export function createPortfolioScene({ layer, root, mount, pointer }) {
+export function createPortfolioScene({ layer, root, mount, prefetch, pointer }) {
   let mounting = null, view = null, active = false;
   function synthetic(type) {
     const { x, y, seen, type: pointerType } = pointer();
@@ -66,6 +67,7 @@ export function createPortfolioScene({ layer, root, mount, pointer }) {
       mounting ??= mount().then(mounted => (view = mounted));
       return mounting;
     },
+    prefetch() { prefetch?.().catch(() => {}); },
     /** Whether a gesture at this point belongs to the gallery, not the page. */
     isScrollRegion(clientX, clientY) {
       return view?.effect?.isGalleryScrollRegion(clientX, clientY) ?? false;

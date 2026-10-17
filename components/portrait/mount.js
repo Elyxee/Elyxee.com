@@ -1,7 +1,43 @@
-import { initPortrait } from './portrait.js';
+import { initPortrait, PORTRAIT_ASSETS } from './portrait.js';
 import { FRAME_ITEMS } from './gallery-items.js';
 import { GALLERY_SEQUENCES } from './gallery-sequence.js';
-import { gallerySource } from './artworks.js';
+import { DUST_ARTWORKS, gallerySource, SPACE_ARTWORKS } from './artworks.js';
+
+const frameUrl = id => new URL(FRAME_ITEMS.find(item => item.id === id).src, import.meta.url).href;
+const prefetched = [];
+
+/**
+ * Downloads, without decoding or drawing, every image the portrait will load:
+ * Space first, as it opens on Space, then Dust. A host calls this once its own
+ * scene has loaded, so a visitor who lingers there finds Portfolio ready. The
+ * portrait's own requests for the same addresses then come from the cache.
+ */
+export async function prefetchPortrait() {
+  if (prefetched.length) return;
+  const waves = [
+    [PORTRAIT_ASSETS.space, PORTRAIT_ASSETS.crown, PORTRAIT_ASSETS.veil, PORTRAIT_ASSETS.ufo,
+      ...GALLERY_SEQUENCES[1].frames.map(frameUrl), ...SPACE_ARTWORKS.map(art => art.src)],
+    [PORTRAIT_ASSETS.dust, ...GALLERY_SEQUENCES[0].frames.map(frameUrl), ...DUST_ARTWORKS.map(art => art.src)],
+  ];
+  for (const wave of waves) {
+    await Promise.allSettled(wave.map(src => new Promise(resolve => {
+      const image = new Image();
+      image.decoding = 'async';
+      image.fetchPriority = 'low';
+      image.onload = image.onerror = resolve;
+      image.src = src;
+      prefetched.push(image);
+    })));
+  }
+}
+
+// While the portrait loads, its static composition shows each image only once
+// it has fully arrived, eased in, rather than drawing it half-downloaded.
+function revealWhenLoaded(image) {
+  const show = () => image.classList.add('is-loaded');
+  if (image.complete && image.naturalWidth) show();
+  else image.addEventListener('load', show, { once: true });
+}
 
 // Page bootstrap for the Dust & Space study, shared by portrait.html and the
 // merged site. It only wires the existing DOM (scene switch, static fallback
@@ -9,7 +45,15 @@ import { gallerySource } from './artworks.js';
 export async function mountPortrait({ root, scene = 1, onHome }) {
   // The fallback heads stay unrequested until now, leaving the opening's
   // bandwidth to Home. They are the same files the effect loads below.
-  root.querySelectorAll('img[data-src]').forEach(image => { image.src = image.dataset.src; });
+  root.querySelectorAll('img[data-src]').forEach(image => {
+    revealWhenLoaded(image);
+    image.src = image.dataset.src;
+  });
+  for (const name of ['space', 'dust']) {
+    const backdrop = new Image();
+    backdrop.onload = () => { root.dataset.backdrop = `${root.dataset.backdrop ?? ''} ${name}`.trim(); };
+    backdrop.src = PORTRAIT_ASSETS[name];
+  }
   const home = document.createElement('a');
   home.className = 'portrait-home';
   home.href = '/';
@@ -85,6 +129,7 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
   for (const item of FRAME_ITEMS) {
     if (item.initial === false) continue;
     const image = new Image();
+    revealWhenLoaded(image);
     image.src = new URL(item.src, import.meta.url).href;
     image.alt = '';
     image.className = 'portrait__gallery-frame';
@@ -100,7 +145,7 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
       const canvas = document.createElement('canvas');
       canvas.width = source.width; canvas.height = source.height;
       canvas.getContext('2d').drawImage(source, 0, 0);
-      canvas.className = image.className;
+      canvas.className = 'portrait__gallery-frame is-loaded';
       canvas.dataset.scene = image.dataset.scene;
       canvas.style.cssText = image.style.cssText;
       image.replaceWith(canvas);

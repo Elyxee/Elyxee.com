@@ -4,8 +4,14 @@ html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { font-family: Arial, sans-serif; }
 .portrait { position: relative; width: 100%; height: 100%; min-height: 100svh; isolation: isolate; touch-action: none; }
 .portrait__fallback, #portrait-fx { position: absolute; inset: 0; width: 100%; height: 100%; }
-.portrait__fallback { overflow: hidden; background: #271805 center / cover no-repeat; }
-[data-scene="dust"] .portrait__fallback { background-image: url('../../Assets/optimized/background/Dust.webp'); }
+.portrait__fallback { overflow: hidden; background: #271805; }
+/* While loading, each picture appears once it has fully arrived, never half-drawn. */
+.portrait__fallback::before { content: ''; position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0; transition: opacity .6s ease; }
+[data-scene="dust"] .portrait__fallback::before { background-image: url('../../Assets/optimized/background/Dust.webp'); }
+.portrait[data-scene="dust"][data-backdrop~="dust"] .portrait__fallback::before,
+.portrait[data-scene="space"][data-backdrop~="space"] .portrait__fallback::before { opacity: 1; }
+.portrait__head, .portrait__gallery-frame { opacity: 0; transition: opacity .6s ease; }
+.portrait__head.is-loaded, .portrait__gallery-frame.is-loaded { opacity: 1; }
 .portrait__composition { position: absolute; left: 50%; top: 50%; width: 1536px; height: 1024px; transform: translate(-50%, -50%) scale(var(--portrait-scale, 1)); }
 .portrait__head { position: absolute; max-width: none; }
 .portrait__gallery-frame { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; pointer-events: none; }
@@ -13,10 +19,11 @@ body { font-family: Arial, sans-serif; }
 [data-scene="space"] .portrait__gallery-frame[data-scene="dust"] { display: none; }
 .portrait__head--veiled { left: 216px; top: 51px; width: 1104px; height: 1104px; }
 .portrait__head--crowned { display: none; left: 256px; top: -24px; width: 1048px; height: 1048px; }
-[data-scene="space"] .portrait__fallback { background-image: url('../../Assets/optimized/background/Space.webp'); background-color: #050606; }
+[data-scene="space"] .portrait__fallback { background-color: #050606; }
+[data-scene="space"] .portrait__fallback::before { background-image: url('../../Assets/optimized/background/Space.webp'); }
 [data-scene="space"] .portrait__head--veiled { display: none; }
 [data-scene="space"] .portrait__head--crowned { display: block; }
-#portrait-fx { display: block; opacity: 0; pointer-events: none; }
+#portrait-fx { display: block; opacity: 0; pointer-events: none; transition: opacity .6s ease; }
 .portrait.is-ready #portrait-fx { opacity: 1; }
 @font-face {
   font-family: PortraitNarri;
@@ -38,9 +45,10 @@ body { font-family: Arial, sans-serif; }
   text-decoration: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color .45s ease, text-shadow .6s ease;
+  transition: color .45s ease, text-shadow .6s ease, opacity .8s ease;
 }
-.portrait-home[hidden] { display: none; }
+/* Hidden at once while the scene changes, then eased back in at its new place. */
+.portrait-home[hidden] { display: block; opacity: 0; visibility: hidden; pointer-events: none; transition: none; }
 [data-scene="space"] .portrait-home:is(:hover, :focus-visible) {
   color: #e3f0f5;
   text-shadow: 0 0 12px #b8ddf36b, 0 0 28px #95bfd92e;
@@ -59,7 +67,9 @@ body { font-family: Arial, sans-serif; }
 }
 .portrait-home:focus-visible { outline: 1px solid currentColor; outline-offset: 6px; }
 @media (max-width: 640px) { .portrait-home { top: max(24px, env(safe-area-inset-top)); font-size: 31px; } }
-@media (prefers-reduced-motion: reduce) { .portrait-home { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .portrait-home, #portrait-fx, .portrait__fallback::before, .portrait__head, .portrait__gallery-frame { transition: none; }
+}
 /* Quiet lettering at rest; light and sand respond only to interaction. */
 @font-face {
   font-family: PortraitGabriela;
@@ -89,7 +99,7 @@ body { font-family: Arial, sans-serif; }
   white-space: nowrap;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: opacity .4s ease;
+  transition: opacity .8s ease;
 }
 .scene-switch::before {
   content: '';

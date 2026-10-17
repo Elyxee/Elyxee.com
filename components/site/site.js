@@ -14,7 +14,7 @@ import { initBurn } from "../burn/index.js";
 import { initCursor } from "../cursor/index.js";
 import { initBurnTypography } from "../burn/type/typography.js";
 import { initBurnSocials } from "../burn/socials.js";
-import { mountPortrait } from "../portrait/mount.js";
+import { mountPortrait, prefetchPortrait } from "../portrait/mount.js";
 import { createFireCurtain } from "./fire-curtain.js";
 import { waitForOpening } from "./opening-ready.js";
 import { createCursorHandoff } from "./cursor-handoff.js";
@@ -112,8 +112,11 @@ const scenes = {
     root: portraitRoot,
     pointer: () => ({ ...handoff.pointer, type: pointerType }),
     mount: () => mountPortrait({ root: portraitRoot, scene: 1, onHome: () => navigate("home") }),
+    prefetch: prefetchPortrait,
   }),
 };
+// Once Home's own images are in, the rest of the opening downloads Portfolio's.
+Promise.allSettled([burn.ready, curtain.ready]).then(() => scenes.portfolio.prefetch());
 const stage = createStagePassage({ burnLayer, portraitLayer, portraitRoot, curtain, depth, handoff, reduced });
 const STAGE_END = VIEWS.find(view => view.passage === "stage" && view.position === 1);
 

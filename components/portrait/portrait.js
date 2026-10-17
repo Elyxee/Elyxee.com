@@ -15,6 +15,7 @@ const ASSETS = {
   veil: new URL('../../Assets/Portrait/veiled.png', import.meta.url).href,
   ufo: new URL('../../Assets/optimized/Elements/ufo.webp', import.meta.url).href,
 };
+export { ASSETS as PORTRAIT_ASSETS };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 function loadImage(url) {
