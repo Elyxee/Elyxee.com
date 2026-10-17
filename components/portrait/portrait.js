@@ -11,8 +11,8 @@ import { galleryWheelDelta } from './gallery-scroll.js';
 const ASSETS = {
   dust: new URL('../../Assets/optimized/background/Dust.webp', import.meta.url).href,
   space: new URL('../../Assets/optimized/background/Space.webp', import.meta.url).href,
-  crown: new URL('../../Assets/Portrait/crowned.png', import.meta.url).href,
-  veil: new URL('../../Assets/Portrait/veiled.png', import.meta.url).href,
+  crown: new URL('../../Assets/optimized/Portrait/crowned.webp', import.meta.url).href,
+  veil: new URL('../../Assets/optimized/Portrait/veiled.webp', import.meta.url).href,
   ufo: new URL('../../Assets/optimized/Elements/ufo.webp', import.meta.url).href,
 };
 export { ASSETS as PORTRAIT_ASSETS };

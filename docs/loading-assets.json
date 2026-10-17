@@ -113,111 +113,261 @@
     "source": "Assets/background/Space.png",
     "output": "Assets/optimized/background/Space.webp",
     "sourceBytes": 6967976,
-    "bytes": 4450784,
+    "bytes": 808562,
     "size": [
       2688,
       1792
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 43.2
   },
   {
     "source": "Assets/background/Dust.png",
     "output": "Assets/optimized/background/Dust.webp",
     "sourceBytes": 3786585,
-    "bytes": 2808856,
+    "bytes": 800004,
     "size": [
       1536,
       1024
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 32.4
+  },
+  {
+    "source": "Assets/Portrait/crowned.png",
+    "output": "Assets/optimized/Portrait/crowned.webp",
+    "sourceBytes": 1213396,
+    "bytes": 182408,
+    "size": [
+      1254,
+      1254
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 43.5
+  },
+  {
+    "source": "Assets/Portrait/veiled.png",
+    "output": "Assets/optimized/Portrait/veiled.webp",
+    "sourceBytes": 1186901,
+    "bytes": 149014,
+    "size": [
+      1254,
+      1254
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 44.9
   },
   {
     "source": "Assets/Elements/ufo.png",
     "output": "Assets/optimized/Elements/ufo.webp",
     "sourceBytes": 432362,
-    "bytes": 278116,
+    "bytes": 62810,
     "size": [
       2172,
       724
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 44.0
   },
   {
     "source": "Assets/Portrait/frames/european.png",
     "output": "Assets/optimized/Portrait/frames/european.webp",
     "sourceBytes": 1013977,
-    "bytes": 599682,
+    "bytes": 162402,
     "size": [
       1121,
       1403
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 43.3
   },
   {
     "source": "Assets/Portrait/frames/gilded.png",
     "output": "Assets/optimized/Portrait/frames/gilded.webp",
     "sourceBytes": 1528749,
-    "bytes": 1084366,
+    "bytes": 323334,
     "size": [
       896,
       1344
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 37.2
+  },
+  {
+    "source": "Assets/Frame/\u590d\u53e4\u6728\u8d28\u76f8\u6846.png",
+    "output": "Assets/optimized/Frame/\u590d\u53e4\u6728\u8d28\u76f8\u6846.webp",
+    "sourceBytes": 1671950,
+    "bytes": 369588,
+    "size": [
+      1448,
+      1086
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 32.9
+  },
+  {
+    "source": "Assets/Frame/\u4e2d\u5f0f\u76f8\u6846.png",
+    "output": "Assets/optimized/Frame/\u4e2d\u5f0f\u76f8\u6846.webp",
+    "sourceBytes": 1297083,
+    "bytes": 185208,
+    "size": [
+      1200,
+      960
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 38.9
+  },
+  {
+    "source": "Assets/Frame/\u51b0\u76f8\u6846.png",
+    "output": "Assets/optimized/Frame/\u51b0\u76f8\u6846.webp",
+    "sourceBytes": 2889381,
+    "bytes": 514422,
+    "size": [
+      1536,
+      1024
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 35.4
+  },
+  {
+    "source": "Assets/Frame/\u6db2\u6001\u8fb9\u6846.png",
+    "output": "Assets/optimized/Frame/\u6db2\u6001\u8fb9\u6846.webp",
+    "sourceBytes": 2162671,
+    "bytes": 371628,
+    "size": [
+      1536,
+      1024
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 36.9
+  },
+  {
+    "source": "Assets/Frame/\u82b1\u5349\u753b\u6846.png",
+    "output": "Assets/optimized/Frame/\u82b1\u5349\u753b\u6846.webp",
+    "sourceBytes": 3003013,
+    "bytes": 576988,
+    "size": [
+      1536,
+      1024
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 37.2
+  },
+  {
+    "source": "Assets/Frame/\u94f6\u6846.png",
+    "output": "Assets/optimized/Frame/\u94f6\u6846.webp",
+    "sourceBytes": 1655320,
+    "bytes": 237296,
+    "size": [
+      1402,
+      1122
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 41.3
   },
   {
     "source": "Assets/Frame/\u706b\u7130\u76f8\u6846.png",
     "output": "Assets/optimized/Frame/\u706b\u7130\u76f8\u6846.webp",
     "sourceBytes": 1993452,
-    "bytes": 1424720,
+    "bytes": 367206,
     "size": [
       1536,
       1024
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 37.9
   },
   {
     "source": "Assets/Portrait/artworks/digital-nations.png",
     "output": "Assets/optimized/Portrait/artworks/digital-nations.webp",
     "sourceBytes": 1700313,
-    "bytes": 1218066,
+    "bytes": 139706,
     "size": [
       1672,
       941
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 37.7
   },
   {
     "source": "Assets/Portrait/artworks/longevity.png",
     "output": "Assets/optimized/Portrait/artworks/longevity.webp",
     "sourceBytes": 1853053,
-    "bytes": 1320310,
+    "bytes": 169126,
     "size": [
       1672,
       941
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 37.1
   },
   {
     "source": "Assets/Portrait/artworks/equality.png",
     "output": "Assets/optimized/Portrait/artworks/equality.webp",
     "sourceBytes": 2662538,
-    "bytes": 1157982,
+    "bytes": 169118,
     "size": [
       1536,
       866
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 39.8
   },
   {
     "source": "Assets/Portrait/artworks/mental-shackles.png",
     "output": "Assets/optimized/Portrait/artworks/mental-shackles.webp",
     "sourceBytes": 2049888,
-    "bytes": 951578,
+    "bytes": 114130,
     "size": [
       1536,
       865
     ],
-    "fullResolutionLossless": true
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 43.6
+  },
+  {
+    "source": "Assets/Portrait/artworks/matrix.png",
+    "output": "Assets/optimized/Portrait/artworks/matrix.webp",
+    "sourceBytes": 196220,
+    "bytes": 95136,
+    "size": [
+      1170,
+      658
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 43.9
+  },
+  {
+    "source": "Assets/Portrait/artworks/solved.png",
+    "output": "Assets/optimized/Portrait/artworks/solved.webp",
+    "sourceBytes": 108330,
+    "bytes": 74572,
+    "size": [
+      780,
+      444
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 39.2
   },
   {
     "source": "Assets/Transitions/combustion-cloud.png",

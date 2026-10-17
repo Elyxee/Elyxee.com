@@ -6,7 +6,7 @@ export const FRAME_ITEMS = [
     "id": "24:588",
     "order": 22,
     "name": "复古木质相框",
-    "src": "../../Assets/Frame/复古木质相框.png",
+    "src": "../../Assets/optimized/Frame/复古木质相框.webp",
     "scene": 0,
     "material": "wood",
     "size": [
@@ -66,7 +66,7 @@ export const FRAME_ITEMS = [
     "id": "24:598",
     "order": 11,
     "name": "中式相框",
-    "src": "../../Assets/Frame/中式相框.png",
+    "src": "../../Assets/optimized/Frame/中式相框.webp",
     "scene": 0,
     "material": "wood",
     "size": [
@@ -86,7 +86,7 @@ export const FRAME_ITEMS = [
     "id": "24:592",
     "order": 23,
     "name": "冰相框",
-    "src": "../../Assets/Frame/冰相框.png",
+    "src": "../../Assets/optimized/Frame/冰相框.webp",
     "scene": 1,
     "material": "ice",
     "size": [
@@ -106,7 +106,7 @@ export const FRAME_ITEMS = [
     "id": "24:594",
     "order": 17,
     "name": "液态边框",
-    "src": "../../Assets/Frame/液态边框.png",
+    "src": "../../Assets/optimized/Frame/液态边框.webp",
     "scene": 1,
     "material": "liquid",
     "size": [
@@ -126,7 +126,7 @@ export const FRAME_ITEMS = [
     "id": "24:596",
     "order": 19,
     "name": "花卉画框",
-    "src": "../../Assets/Frame/花卉画框.png",
+    "src": "../../Assets/optimized/Frame/花卉画框.webp",
     "scene": 1,
     "material": "flower",
     "size": [
@@ -146,7 +146,7 @@ export const FRAME_ITEMS = [
     "id": "24:597",
     "order": 18,
     "name": "银框",
-    "src": "../../Assets/Frame/银框.png",
+    "src": "../../Assets/optimized/Frame/银框.webp",
     "scene": 1,
     "material": "silver",
     "size": [

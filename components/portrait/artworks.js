@@ -1,7 +1,7 @@
 // Only the seven image fills from Figma's Presentation - Eng (47:1684).
 // Links read from the captions in Presentation - Eng, alongside each cover.
-// Lossless WebP copies of the PNG covers; three covers are JPEG data already.
-const JPEG_COVERS = new Set(['matrix', 'solved', 'portal']);
+// WebP copies of the covers; Portal is already JPEG data and stays as it is.
+const JPEG_COVERS = new Set(['portal']);
 const artwork = (id, name, title, video) => ({ id, title,
   url: `https://www.bilibili.com/video/${video}/`,
   src: new URL(JPEG_COVERS.has(name) ? `../../Assets/Portrait/artworks/${name}.png`
