@@ -102,6 +102,7 @@ for source in [
 ]:
     export_lossy(source, source.removeprefix('Assets/').removesuffix('.png') + '.webp')
 
+export('Assets/Portrait/artworks/connect4.png', 'Portrait/artworks/connect4.webp')
 export('Assets/Transitions/combustion-cloud.png', 'combustion-preview.webp', (384, 216))
 export('Assets/Elements/Favicon #1.PNG', 'favicon-64.png', (64, 64), png=True)
 export('Assets/Elements/Favicon #1.PNG', 'apple-touch-icon.png', (180, 180), png=True)

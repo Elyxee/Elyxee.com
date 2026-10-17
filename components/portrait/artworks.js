@@ -1,9 +1,9 @@
-// Only the seven image fills from Figma's Presentation - Eng (47:1684).
-// Links read from the captions in Presentation - Eng, alongside each cover.
+// The seven image fills from Figma's Presentation - Eng (47:1684), plus Connect 4Live.
+// Video links come from the Figma captions; projects can link directly to their sites.
 // WebP copies of the covers; Portal is already JPEG data and stays as it is.
 const JPEG_COVERS = new Set(['portal']);
-const artwork = (id, name, title, video) => ({ id, title,
-  url: `https://www.bilibili.com/video/${video}/`,
+const artwork = (id, name, title, link) => ({ id, title,
+  url: link.startsWith('https://') ? link : `https://www.bilibili.com/video/${link}/`,
   src: new URL(JPEG_COVERS.has(name) ? `../../Assets/Portrait/artworks/${name}.png`
     : `../../Assets/optimized/Portrait/artworks/${name}.webp`, import.meta.url).href });
 export const DUST_ARTWORKS = [
@@ -16,6 +16,7 @@ export const SPACE_ARTWORKS = [
   artwork('47:1691', 'matrix', 'Matrix', 'BV1UP2mYBEi8'),
   artwork('47:1694', 'solved', 'Solved', 'BV1FK42187k7'),
   artwork('47:1697', 'portal', 'Portal', 'BV116DoYzEz6'),
+  artwork('connect4', 'connect4', 'Connect 4Live', 'https://connect4.elyxee.com/'),
 ];
 
 export function artworkFor(item) {

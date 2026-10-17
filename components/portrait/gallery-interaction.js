@@ -70,9 +70,9 @@ export function bindGalleryInteraction(root, gallery, context, signal) {
     const selection = gallery.selection;
     if (selection) {
       root.dataset.gallerySelected = selection.artwork.id;
-      status.textContent = `${selection.artwork.title}。已选中，再次点击打开视频；点击空白处或按 Escape 恢复轨道。`;
+      status.textContent = `${selection.artwork.title}。已选中，再次点击打开作品；点击空白处或按 Escape 恢复轨道。`;
     } else clear();
-    // Stay inside the user's click so browsers permit the new video tab.
+    // Stay inside the user's click so browsers permit the new artwork tab.
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
   }, options);
   window.addEventListener('keydown', event => { if (event.key === 'Escape') clear(); }, options);
