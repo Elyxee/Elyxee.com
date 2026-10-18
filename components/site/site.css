@@ -7,6 +7,8 @@ html,
 body {
   /* Opaque underlay while the reconstructed opening initializes. */
   background: #050403;
+  /* A sideways trackpad swipe must not turn the page back in history. */
+  overscroll-behavior-x: none;
 }
 
 body {

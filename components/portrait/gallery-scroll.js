@@ -1,5 +1,6 @@
 const clamp = (value, limit) => Math.max(-limit, Math.min(limit, value));
-const SCROLL_SPEED_FACTOR = 1.25;
+// Manual travel per scroll; raised as the exhibition grew longer.
+export const SCROLL_SPEED_FACTOR = 2.5;
 
 // Normalize wheel notches, trackpads and page scrolling before applying the
 // same gentle, bounded impulse in art pixels. Pinch zoom is filtered by caller.

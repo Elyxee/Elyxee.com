@@ -1,7 +1,7 @@
 import { initPortrait, PORTRAIT_ASSETS } from './portrait.js';
 import { FRAME_ITEMS } from './gallery-items.js';
 import { GALLERY_SEQUENCES } from './gallery-sequence.js';
-import { DUST_ARTWORKS, gallerySource, SPACE_ARTWORKS } from './artworks.js';
+import { coverSources, DUST_ARTWORKS, gallerySource, SPACE_ARTWORKS } from './artworks.js';
 
 const frameUrl = id => new URL(FRAME_ITEMS.find(item => item.id === id).src, import.meta.url).href;
 const prefetched = [];
@@ -16,8 +16,8 @@ export async function prefetchPortrait() {
   if (prefetched.length) return;
   const waves = [
     [PORTRAIT_ASSETS.space, PORTRAIT_ASSETS.crown, PORTRAIT_ASSETS.veil, PORTRAIT_ASSETS.ufo,
-      ...GALLERY_SEQUENCES[1].frames.map(frameUrl), ...SPACE_ARTWORKS.map(art => art.src)],
-    [PORTRAIT_ASSETS.dust, ...GALLERY_SEQUENCES[0].frames.map(frameUrl), ...DUST_ARTWORKS.map(art => art.src)],
+      ...GALLERY_SEQUENCES[1].frames.map(frameUrl), ...SPACE_ARTWORKS.flatMap(coverSources)],
+    [PORTRAIT_ASSETS.dust, ...GALLERY_SEQUENCES[0].frames.map(frameUrl), ...DUST_ARTWORKS.flatMap(coverSources)],
   ];
   for (const wave of waves) {
     await Promise.allSettled(wave.map(src => new Promise(resolve => {

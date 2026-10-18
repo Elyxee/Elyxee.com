@@ -305,6 +305,19 @@
     "psnr": 37.7
   },
   {
+    "source": "Assets/Portrait/artworks/digital-nations-tall.png",
+    "output": "Assets/optimized/Portrait/artworks/digital-nations-tall.webp",
+    "sourceBytes": 847702,
+    "bytes": 92998,
+    "size": [
+      1000,
+      1430
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 38.0
+  },
+  {
     "source": "Assets/Portrait/artworks/longevity.png",
     "output": "Assets/optimized/Portrait/artworks/longevity.webp",
     "sourceBytes": 1853053,
@@ -316,6 +329,19 @@
     "fullResolutionLossless": false,
     "lossyQuality": 90,
     "psnr": 37.1
+  },
+  {
+    "source": "Assets/Portrait/artworks/longevity-tall.png",
+    "output": "Assets/optimized/Portrait/artworks/longevity-tall.webp",
+    "sourceBytes": 885923,
+    "bytes": 98798,
+    "size": [
+      1000,
+      1430
+    ],
+    "fullResolutionLossless": false,
+    "lossyQuality": 90,
+    "psnr": 37.7
   },
   {
     "source": "Assets/Portrait/artworks/equality.png",
@@ -368,6 +394,94 @@
     "fullResolutionLossless": false,
     "lossyQuality": 90,
     "psnr": 39.2
+  },
+  {
+    "source": "Assets/Portrait/artworks/connect4.png",
+    "output": "Assets/optimized/Portrait/artworks/connect4.webp",
+    "sourceBytes": 420135,
+    "bytes": 279102,
+    "size": [
+      512,
+      512
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/connect4-wide.png",
+    "output": "Assets/optimized/Portrait/artworks/connect4-wide.webp",
+    "sourceBytes": 365910,
+    "bytes": 276584,
+    "size": [
+      830,
+      512
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/yeast-sugar.png",
+    "output": "Assets/optimized/Portrait/artworks/yeast-sugar.webp",
+    "sourceBytes": 94299,
+    "bytes": 31624,
+    "size": [
+      1224,
+      1584
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/pad-texture.png",
+    "output": "Assets/optimized/Portrait/artworks/pad-texture.webp",
+    "sourceBytes": 91279,
+    "bytes": 32702,
+    "size": [
+      1224,
+      1584
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/be-fine-tea.png",
+    "output": "Assets/optimized/Portrait/artworks/be-fine-tea.webp",
+    "sourceBytes": 102052,
+    "bytes": 38746,
+    "size": [
+      1224,
+      1584
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/yeast-sugar-wide.png",
+    "output": "Assets/optimized/Portrait/artworks/yeast-sugar-wide.webp",
+    "sourceBytes": 81858,
+    "bytes": 29196,
+    "size": [
+      1600,
+      1040
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/pad-texture-wide.png",
+    "output": "Assets/optimized/Portrait/artworks/pad-texture-wide.webp",
+    "sourceBytes": 77380,
+    "bytes": 27900,
+    "size": [
+      1600,
+      1040
+    ],
+    "fullResolutionLossless": true
+  },
+  {
+    "source": "Assets/Portrait/artworks/be-fine-tea-wide.png",
+    "output": "Assets/optimized/Portrait/artworks/be-fine-tea-wide.webp",
+    "sourceBytes": 85203,
+    "bytes": 32872,
+    "size": [
+      1600,
+      1040
+    ],
+    "fullResolutionLossless": true
   },
   {
     "source": "Assets/Transitions/combustion-cloud.png",

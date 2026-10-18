@@ -49,6 +49,7 @@ export const FRAME_ITEMS = [
     "src": "../../Assets/optimized/Portrait/frames/european.webp",
     "scene": 0,
     "material": "stone",
+    "keepShape": true,
     "size": [
       448.917236328125,
       561.8473510742188

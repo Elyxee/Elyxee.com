@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGalleryScroll, galleryWheelDelta } from '../../components/portrait/gallery-scroll.js';
+import { createGalleryScroll, galleryWheelDelta, SCROLL_SPEED_FACTOR } from '../../components/portrait/gallery-scroll.js';
 import { createGallerySequence, GALLERY_SEQUENCES } from '../../components/portrait/gallery-sequence.js';
 import { artworkFor } from '../../components/portrait/artworks.js';
 
@@ -18,13 +18,13 @@ test('scroll eases in, caps speed, and settles back to zero added speed', () => 
   const motion = createGalleryScroll();
   motion.input(100000);
   const first = motion.update(1 / 120) * 120;
-  assert(first > 0 && first < 10, 'first frame must ease in');
+  assert(first > 0 && first < 8 * SCROLL_SPEED_FACTOR, 'first frame must ease in');
   let peak = first;
   for (let i = 0; i < 240; i++) {
     motion.input(180);
     peak = Math.max(peak, motion.update(1 / 120) * 120);
   }
-  assert(peak > 50 && peak < 118.75);
+  assert(peak > 40 * SCROLL_SPEED_FACTOR && peak < 95 * SCROLL_SPEED_FACTOR);
   for (let i = 0; i < 480; i++) motion.update(1 / 120);
   assert(Math.abs(motion.update(1 / 120) * 120) < .001);
 });
@@ -37,7 +37,7 @@ test('same gesture travels the same distance at 30, 60 and 120 Hz', () => {
     for (let i = 0; i < fps * 3; i++) distance += motion.update(1 / fps);
     return distance;
   });
-  assert(distances.every(distance => distance < -30 && distance > -40));
+  assert(distances.every(distance => distance / SCROLL_SPEED_FACTOR < -24 && distance / SCROLL_SPEED_FACTOR > -32));
   assert(Math.max(...distances) - Math.min(...distances) < 1e-10);
 });
 
@@ -49,12 +49,6 @@ test('reduced motion permits explicit movement without residual inertia', () => 
   motion.input(180);
   motion.reset();
   assert.equal(motion.update(1), 0);
-});
-
-test('Matrix and Equality exchange the initial liquid and ice slots', () => {
-  const items = createGallerySequence(1, [], 123).update(0, view);
-  assert.equal(artworkFor(items.find(item => item.frameId === '24:592' && item.cycle === 0)).id, '50:1718');
-  assert.equal(artworkFor(items.find(item => item.frameId === '24:594' && item.cycle === 0)).id, '47:1691');
 });
 
 for (const scene of [0, 1]) {

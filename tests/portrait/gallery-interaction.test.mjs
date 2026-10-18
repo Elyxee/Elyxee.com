@@ -13,15 +13,29 @@ test('each cover retains its video or website link across repeated frame slots',
   const expected = Object.fromEntries(Object.entries(videos).map(([id, bv]) =>
     [id, `https://www.bilibili.com/video/${bv}/`]));
   expected.connect4 = 'https://connect4.elyxee.com/';
+  expected['ib-biology'] = 'https://www.papermark.com/view/cmvdbn0pw0001jm08isq1g8hc';
+  expected['ib-math'] = 'https://www.papermark.com/view/cmvdce32i0003l3072ec6nv05';
+  expected['ib-business'] = 'https://www.papermark.com/view/cmvdc0ygy0003i307kqc2dgkv';
   for (const art of [...DUST_ARTWORKS,...SPACE_ARTWORKS])
     assert.equal(art.url, expected[art.id]);
   for (let contentIndex=-10; contentIndex<20; contentIndex++) {
     const art = artworkFor({scene:1,contentIndex,frameId:'24:592'});
     assert.equal(art.url, expected[art.id]);
   }
-  assert.equal(artworkFor({scene:0,frameId:'24:588'}),DUST_ARTWORKS[0]);
-  assert.equal(artworkFor({scene:0,frameId:'24:598'}),DUST_ARTWORKS[1]);
-  assert.equal(artworkFor({scene:0,frameId:'dust-fire'}),null);
+});
+
+test('covers come in shuffled rounds: each once per round, never twice in a row', () => {
+  for (const [scene, covers, frameId] of [[0, DUST_ARTWORKS, '24:588'], [1, SPACE_ARTWORKS, '24:592']]) {
+    const n = covers.length, at = contentIndex => artworkFor({ scene, contentIndex, frameId });
+    for (let round = -3; round < 6; round++) {
+      const shown = Array.from({ length: n }, (_, i) => at(round * n + i));
+      assert.deepEqual(new Set(shown), new Set(covers), `scene ${scene} round ${round}`);
+    }
+    for (let i = -3 * n; i < 6 * n; i++) {
+      assert.notEqual(at(i), at(i + 1), `scene ${scene}: ${i} repeats`);
+      assert.equal(at(i), at(i), 'an entry keeps its cover');
+    }
+  }
 });
 
 test('first click selects, another entry reselects, only the same entry opens', () => {

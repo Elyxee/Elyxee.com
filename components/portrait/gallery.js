@@ -2,7 +2,7 @@ import { FRAME_ITEMS } from './gallery-items.js';
 import { COMPOSITION } from './settings.js';
 import { createGallerySequence, GALLERY_SEQUENCES } from './gallery-sequence.js';
 import { isNearGalleryFrame, isNearGalleryTrack } from './gallery-region.js';
-import { artworkFor, DUST_ARTWORKS, SPACE_ARTWORKS, loadGalleryImage, mountArtwork } from './artworks.js';
+import { artworkFor, coverFor, coverSources, DUST_ARTWORKS, SPACE_ARTWORKS, loadGalleryImage, mountArtwork, releaseArtwork } from './artworks.js';
 import { createGallerySelection } from './gallery-interaction.js';
 
 const VS = `#version 300 es
@@ -91,16 +91,37 @@ function alphaMap(image) {
 export async function createGallery(gl, crowned, veiled, { contentByScene = [[], []], canWork = () => true } = {}) {
   const frames = new Map(await Promise.all(FRAME_ITEMS.map(async item =>
     [item.id, await loadGalleryImage(new URL(item.src, import.meta.url).href)])));
-  const artworks = new Map(await Promise.all([...DUST_ARTWORKS, ...SPACE_ARTWORKS].map(async art =>
-    [art.id, await loadGalleryImage(art.src)])));
+  const covers = new Map(await Promise.all([...DUST_ARTWORKS, ...SPACE_ARTWORKS].flatMap(coverSources).map(async src =>
+    [src, await loadGalleryImage(src)])));
+  const coverImage = (art, item) => covers.get(coverFor(art, item));
   const sourceTextures = new Map(), hitMasks = new Map();
   const selection = createGallerySelection();
   const textureKey = item => `${item.frameId}:${artworkFor(item)?.id ?? 'empty'}`;
+  // Each frame-and-cover pairing is a texture of several megabytes, and the
+  // shuffled rounds meet dozens of pairings over a long visit. The most
+  // recently drawn ones are kept; the rest are let go and, should a pairing
+  // come round again, composed anew exactly as before.
+  const TEXTURE_LIMIT = 16;
+  const pairings = new Map();
+  let drawClock = 0;
+  function evict() {
+    if (sourceTextures.size <= TEXTURE_LIMIT) return;
+    const onScreen = new Set([...visible[0], ...visible[1]].map(textureKey));
+    const idle = [...pairings.entries()].filter(([key]) => !onScreen.has(key))
+      .sort((a, b) => a[1].drawn - b[1].drawn);
+    for (const [key, { item, cover }] of idle) {
+      if (sourceTextures.size <= TEXTURE_LIMIT) break;
+      gl.deleteTexture(sourceTextures.get(key));
+      sourceTextures.delete(key); hitMasks.delete(key); pairings.delete(key);
+      if (cover) releaseArtwork(item, cover);
+    }
+  }
   function textureFor(item) {
     const art = artworkFor(item), key = textureKey(item);
-    if (sourceTextures.has(key)) return sourceTextures.get(key);
+    if (sourceTextures.has(key)) { pairings.get(key).drawn = drawClock; return sourceTextures.get(key); }
     const frame = frames.get(item.frameId);
-    const image = art ? mountArtwork(frame, artworks.get(art.id), item) : frame;
+    const cover = art && coverImage(art, item);
+    const image = art ? mountArtwork(frame, cover, item) : frame;
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
@@ -111,6 +132,8 @@ export async function createGallery(gl, crowned, veiled, { contentByScene = [[],
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     sourceTextures.set(key, texture);
     hitMasks.set(key, alphaMap(image));
+    pairings.set(key, { item: { frameId: item.frameId }, cover, drawn: drawClock });
+    evict();
     return texture;
   }
   // A scene's frames are first drawn the moment it appears: for Dust, in the
@@ -129,7 +152,7 @@ export async function createGallery(gl, crowned, veiled, { contentByScene = [[],
       const art = artworkFor(item);
       if (sourceTextures.has(`${id}:${art?.id ?? 'empty'}`)) continue;
       do await idle(); while (!canWork());
-      await Promise.all([frames.get(id).decode(), art && artworks.get(art.id).decode()]).catch(() => {});
+      await Promise.all([frames.get(id).decode(), art && coverImage(art, item).decode()]).catch(() => {});
       if (destroyed) return;
       gl.activeTexture(gl.TEXTURE0);
       textureFor(item);
@@ -194,6 +217,7 @@ export async function createGallery(gl, crowned, veiled, { contentByScene = [[],
   function update(dt, pointer, scale, originX, originY, reduced, transition, scene, draw = true) {
     const view = { width, height, scale, originX, originY };
     let unmade = 1;
+    drawClock++;
     for (let targetScene=0; targetScene<2; targetScene++) {
       if (targetScene !== scene && !transition) continue;
       // Freeze the entire sequence clock, including any manual inertia. The

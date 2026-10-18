@@ -1,10 +1,10 @@
 import { FRAME_ITEMS } from './gallery-items.js';
 import { createGalleryScroll } from './gallery-scroll.js';
 
-// The earlier 10-second loop made the gallery feel rushed. Keep the original
-// art-direction drift and add only a small lift so a complete pass still feels
-// alive without overtaking the portraits.
-export const GALLERY_SPEED_FACTOR = 1.05;
+// The earlier 10-second loop made the gallery feel rushed; the original
+// art-direction drift then took two minutes a pass. With more entries to see,
+// it now drifts at 2.4× that original speed (about 50 s a pass).
+export const GALLERY_SPEED_FACTOR = 2.4;
 
 // A repeated spatial arrangement, not independently wrapped frame paths.
 // One shared translation keeps the tuned gaps throughout every lap.

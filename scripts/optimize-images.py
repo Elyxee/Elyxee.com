@@ -98,11 +98,15 @@ for source in [
     *[f'Assets/Frame/{name}.png' for name in
       ['复古木质相框', '中式相框', '冰相框', '液态边框', '花卉画框', '银框', '火焰相框']],
     *[f'Assets/Portrait/artworks/{name}.png' for name in
-      ['digital-nations', 'longevity', 'equality', 'mental-shackles', 'matrix', 'solved']],
+      ['digital-nations', 'digital-nations-tall', 'longevity', 'longevity-tall', 'equality', 'mental-shackles', 'matrix', 'solved']],
 ]:
     export_lossy(source, source.removeprefix('Assets/').removesuffix('.png') + '.webp')
 
 export('Assets/Portrait/artworks/connect4.png', 'Portrait/artworks/connect4.webp')
+export('Assets/Portrait/artworks/connect4-wide.png', 'Portrait/artworks/connect4-wide.webp')
+# Typeset paper covers stay lossless: small text keeps its edges.
+for name in ['yeast-sugar', 'pad-texture', 'be-fine-tea', 'yeast-sugar-wide', 'pad-texture-wide', 'be-fine-tea-wide']:
+    export(f'Assets/Portrait/artworks/{name}.png', f'Portrait/artworks/{name}.webp')
 export('Assets/Transitions/combustion-cloud.png', 'combustion-preview.webp', (384, 216))
 export('Assets/Elements/Favicon #1.PNG', 'favicon-64.png', (64, 64), png=True)
 export('Assets/Elements/Favicon #1.PNG', 'apple-touch-icon.png', (180, 180), png=True)
