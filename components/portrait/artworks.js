@@ -209,21 +209,9 @@ export function mountArtwork(frame, image, item) {
   const destX = [0, x, x + printW], destY = [0, y, y + printH];
   const destW = [x, printW, width - x - printW];
   const destH = [y, printH, height - y - printH];
-  if (keepShape) {
-    // An oval's opening is far from the print's proportions: stretched edge
-    // pixels would streak across it, so a softened, enlarged copy of the same
-    // cover fills the opening behind the complete print instead.
-    const fill = Math.max((right - left) / iw, (bottom - top) / ih);
-    ctx.save();
-    ctx.filter = `blur(${Math.round(width * .025)}px)`;
-    ctx.drawImage(image, cx - iw * fill / 2, cy - ih * fill / 2, iw * fill, ih * fill);
-    ctx.restore();
-    ctx.drawImage(image, x, y, printW, printH);
-  } else {
-    for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
-      ctx.drawImage(image, sourceX[col], sourceY[row], sourceW[col], sourceH[row],
-        destX[col], destY[row], destW[col], destH[row]);
-    }
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
+    ctx.drawImage(image, sourceX[col], sourceY[row], sourceW[col], sourceH[row],
+      destX[col], destY[row], destW[col], destH[row]);
   }
   ctx.restore();
   ctx.globalCompositeOperation = 'destination-in'; ctx.drawImage(mask, 0, 0);
