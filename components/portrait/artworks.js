@@ -209,10 +209,16 @@ export function mountArtwork(frame, image, item) {
   const destX = [0, x, x + printW], destY = [0, y, y + printH];
   const destW = [x, printW, width - x - printW];
   const destH = [y, printH, height - y - printH];
+  // The edge pieces reach a little under the print, which is drawn last, so no
+  // seam of half-covered pixels shows where they meet.
+  const overlap = 2;
   for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
+    if (row === 1 && col === 1) continue;
+    const grow = [col === 0 ? overlap : 0, col === 2 ? overlap : 0, row === 0 ? overlap : 0, row === 2 ? overlap : 0];
     ctx.drawImage(image, sourceX[col], sourceY[row], sourceW[col], sourceH[row],
-      destX[col], destY[row], destW[col], destH[row]);
+      destX[col] - grow[1], destY[row] - grow[3], destW[col] + grow[0] + grow[1], destH[row] + grow[2] + grow[3]);
   }
+  ctx.drawImage(image, x, y, printW, printH);
   ctx.restore();
   ctx.globalCompositeOperation = 'destination-in'; ctx.drawImage(mask, 0, 0);
   ctx.globalCompositeOperation = 'source-atop';
