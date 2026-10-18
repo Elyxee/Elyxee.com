@@ -88,7 +88,7 @@ function alphaMap(image) {
   return (x, y) => x < 0 || y < 0 || x >= 1 || y >= 1 ? 0 : data[(Math.floor(y * 128) * 128 + Math.floor(x * 128)) * 4 + 3] / 255;
 }
 
-export async function createGallery(gl, crowned, veiled, contentByScene = [[], []]) {
+export async function createGallery(gl, crowned, veiled, { contentByScene = [[], []], canWork = () => true } = {}) {
   const frames = new Map(await Promise.all(FRAME_ITEMS.map(async item =>
     [item.id, await loadGalleryImage(new URL(item.src, import.meta.url).href)])));
   const artworks = new Map(await Promise.all([...DUST_ARTWORKS, ...SPACE_ARTWORKS].map(async art =>
@@ -128,7 +128,7 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
       const item = { ...frame, frameId: id, scene, contentIndex };
       const art = artworkFor(item);
       if (sourceTextures.has(`${id}:${art?.id ?? 'empty'}`)) continue;
-      await idle();
+      do await idle(); while (!canWork());
       await Promise.all([frames.get(id).decode(), art && artworks.get(art.id).decode()]).catch(() => {});
       if (destroyed) return;
       gl.activeTexture(gl.TEXTURE0);
@@ -215,8 +215,8 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
         item.pose = poseFor(item,scale,originX,originY);
         // Textures and hit masks are prepared on the same schedule while
         // hidden, so input and the first visible frame find them ready. Each
-        // takes tens of milliseconds, so at most one is made per frame.
-        if (!draw && unmade && !sourceTextures.has(textureKey(item))) { textureFor(item); unmade--; }
+        // takes tens of milliseconds: at most one per frame, when allowed.
+        if (!draw && unmade && !sourceTextures.has(textureKey(item)) && canWork()) { textureFor(item); unmade--; }
       }
     }
     if (!draw) return;

@@ -51,6 +51,11 @@ let current = "home";   // the view the site last settled on
 let owner = "home";     // the view receiving input; null while a page passage runs
 let loadingWheelUntil = 0;
 let queuedNavigation = null; // a nav click made while the opening still runs
+const sceneOf = { portfolio: "space" }; // the scene a multi-scene view shows
+// Portfolio's one-off setup runs in pieces at moments the visitor cannot feel
+// them: while the pointer rests, or once they head for Portfolio. It never
+// waits for long.
+let lastPointerMoveAt = -Infinity, portfolioWanted = false, homeShownAt = Infinity;
 let previousFrameAt = performance.now();
 const preloadQueued = new Set();
 
@@ -64,6 +69,7 @@ const handoff = createCursorHandoff();
 let pointerType = "mouse";
 let pointerInside = false;
 document.addEventListener("pointermove", event => {
+  lastPointerMoveAt = performance.now();
   if (event.pointerType !== "touch") {
     handoff.setPointer(event.clientX, event.clientY);
     pointerType = event.pointerType;
@@ -117,7 +123,13 @@ const scenes = {
     layer: portraitLayer,
     root: portraitRoot,
     pointer: () => ({ ...handoff.pointer, type: pointerType }),
-    mount: () => mountPortrait({ root: portraitRoot, scene: 1, onHome: () => navigate("home") }),
+    mount: () => mountPortrait({
+      root: portraitRoot, scene: 1, onHome: () => navigate("home"), canWork: setupMayRun,
+      onSceneChange(scene) {
+        sceneOf.portfolio = scene;
+        if (current === "portfolio") document.title = titleOf("portfolio");
+      },
+    }),
     prefetch: prefetchPortrait,
   }),
 };
@@ -168,9 +180,20 @@ function syncOwner() {
   for (const [id, scene] of Object.entries(scenes)) scene.setActive(id === owner);
 }
 
+function setupMayRun() {
+  const now = performance.now();
+  return now - lastPointerMoveAt > 300 || portfolioWanted || owner !== "home"
+    || stage.input > 0 || Boolean(activePage()) || now - homeShownAt > 6000;
+}
+
+function titleOf(id) {
+  const title = viewById(id)?.title;
+  return (title && typeof title === "object" ? title[sceneOf[id]] : title) ?? hostTitle;
+}
+
 function settle(id, { record = true } = {}) {
   current = id;
-  document.title = viewById(id)?.title ?? hostTitle;
+  document.title = titleOf(id);
   if (record) router.record(id);
 }
 
@@ -268,6 +291,7 @@ function finishIntro() {
   intro = null;
   stage.jump(0);
   inputEnabled = true;
+  homeShownAt = performance.now();
   // The flame lights where the pointer already rests, rather than waiting for
   // it to move, and a link clicked during the reveal is followed now.
   if (pointerInside && handoff.pointer.seen && document.hasFocus()) cursor.wake(handoff.pointer.x, handoff.pointer.y);
@@ -362,11 +386,14 @@ nav?.addEventListener('click', event => {
 });
 for (const link of nav?.querySelectorAll('a[href]') ?? []) {
   const id = viewFromPath(new URL(link.href).pathname);
-  if (viewById(id)?.passage !== "page") continue;
-  // Not during the opening: setting a page up would stall the receding fire.
-  const preloadPage = () => { if (!intro) pages[id].preload(); };
-  link.addEventListener('pointerenter', preloadPage);
-  link.addEventListener('focus', preloadPage);
+  // Pointing at a link readies its view. A page is set up (not during the
+  // opening, where that would stall the receding fire); Portfolio's setup
+  // stops waiting for the pointer to rest.
+  const ready = viewById(id)?.passage === "page" ? () => { if (!intro) pages[id].preload(); }
+    : id === STAGE_END.id ? () => { portfolioWanted = true; } : null;
+  if (!ready) continue;
+  link.addEventListener('pointerenter', ready);
+  link.addEventListener('focus', ready);
 }
 
 window.addEventListener("keydown", event => {

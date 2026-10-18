@@ -45,7 +45,11 @@ function revealWhenLoaded(image) {
 // Page bootstrap for the Dust & Space study, shared by portrait.html and the
 // merged site. It only wires the existing DOM (scene switch, static fallback
 // frames) to initPortrait; every effect lives untouched in portrait.js.
-export async function mountPortrait({ root, scene = 1, onHome }) {
+// `canWork()` tells whether a piece of one-off setup may run now; a host can
+// hold it back while the visitor is busy with another scene. `onSceneChange`
+// hears each completed Space ↔ Dust switch.
+export async function mountPortrait({ root, scene = 1, onHome, onSceneChange = () => {}, canWork = () => true }) {
+  const nextPiece = async () => { do await nextFrame(); while (!canWork()); };
   // The fallback heads stay unrequested until now, leaving the opening's
   // bandwidth to Home. They are the same files the effect loads below.
   root.querySelectorAll('img[data-src]').forEach(image => {
@@ -118,6 +122,7 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
   function showScene(next) {
     current = next;
     root.dataset.scene = next ? 'space' : 'dust';
+    onSceneChange(root.dataset.scene);
     label.textContent = next ? 'Podcast & Essay' : 'Updates & Video';
     button.setAttribute('aria-label', next ? 'Podcast & Essay，切换到沙尘场景' : 'Updates & Video，切换到星空场景');
     status.textContent = next
@@ -147,11 +152,11 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
     mounts.push({ entry, image });
   }
   composition.prepend(backFrames);
-  // Covers are mounted into their frames one per frame, not all in one task:
+  // Covers are mounted into their frames one at a time, not all in one task:
   // each takes tens of milliseconds and would otherwise stall the page at once.
   (async () => {
     for (const { entry, image } of mounts) {
-      await nextFrame();
+      await nextPiece();
       try {
         const source = await gallerySource(entry);
         if (!(source instanceof HTMLCanvasElement)) continue;
@@ -168,7 +173,7 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
 
   let effect = null;
   try {
-    effect = await initPortrait({ root, scene: current, onSceneChange: showScene });
+    effect = await initPortrait({ root, scene: current, onSceneChange: showScene, canWork });
     button.disabled = false;
     button.addEventListener('click', async () => {
       button.disabled = true;

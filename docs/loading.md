@@ -94,4 +94,16 @@
 ## About
 
 - 页面滚动层改为 `overscroll-behavior: none`：滚到顶部不再像普通网页那样回弹、拉出黑底。从页面中间滚上来会停在顶部，再滑一次回到 Portfolio（与原逻辑相同）。
-- 标签页标题与其他界面一致，都是 Elyxee。
+- 标签页标题见下一节。
+
+## 进站后的火焰光标 · 2026-10-18
+
+- 进站后移动鼠标仍会顿：开场后 Portfolio 的一次性准备（大图上传 GPU、星点与光环、封面合成、画廊贴图，共约 0.9 s 主线程工作，每块 60–80 ms）正好落在访客刚开始移动火焰的时候。光标本身每帧不到 1 ms，不是它的问题。
+- 现在这些准备只在鼠标静止 0.3 s 以上时一块一块地做；访客指向 Portfolio 链接、滚动或点击前往时立刻做；最多等 6 s。产出不变，只是换了时机（`mountPortrait` 的 `canWork`）。
+- 实测：进站后连续移动 3 s，期间没有任何卡顿（无长任务、无超过 30 ms 的帧）；停下后约 1.1 s 内准备完毕。一直不停地移动的话，第 6 s 开始准备，约 0.7 s 内有几次轻微顿挫。
+
+## 标签页标题 · 2026-10-18
+
+- Home：Elyxee, Undeniable（也是 `index.html` 的标题，搜索结果显示这个）
+- Portfolio：Space 为 Elyxee, Blog & Talks，Dust 为 Elyxee, Essay & Podcasts，随场景切换完成而变
+- About：Elyxee, Contact

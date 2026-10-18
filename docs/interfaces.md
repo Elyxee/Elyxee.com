@@ -22,12 +22,12 @@ components/burn/ cursor/ portrait/ about/   各界面自己的效果，调度器
 ## 界面表 `views.js`
 
 ```js
-{ id: 'home',      path: '/',          passage: 'stage', position: 0, click: { omega: 2.7 } }
-{ id: 'portfolio', path: '/portfolio', passage: 'stage', position: 1, below: 'about', click: { durationMs: 3200 } }
-{ id: 'about',     path: '/about',     passage: 'page',  label, load: () => import(...) }
+{ id: 'home',      path: '/',          passage: 'stage', position: 0, title, click: { omega: 2.7 } }
+{ id: 'portfolio', path: '/portfolio', passage: 'stage', position: 1, below: 'about', title: { space, dust }, click: { durationMs: 3200 } }
+{ id: 'about',     path: '/about',     passage: 'page',  title, label, load: () => import(...) }
 ```
 
-- `title` 可选：写了就是该界面的标签页标题；不写则沿用网站标题 Elyxee（目前所有界面都不写）。
+- `title` 是标签页标题：一个字符串，或按场景分开（Portfolio 写成 `{ space, dust }`，随当前场景切换）；不写则沿用 `index.html` 的标题。
 
 - `stage`：全屏、实时的场景，处在同一条滚动轨道上（位置 0 和 1），由舞台转场连接。
 - `page`：可以往下读的页面，盖在舞台之上，第一次需要时才加载（`load()` 返回挂载函数）。
@@ -72,7 +72,7 @@ components/burn/ cursor/ portrait/ about/   各界面自己的效果，调度器
 **加一个页面界面（例如 Blog、Contact）**
 
 1. 写它自己的挂载模块，例如 `components/blog/mount.js`，导出 `mountBlog({ root, scrollRoot, onNavigate })`，返回 `{ ready, setActive, destroy }`。`ready` 在字体和图片可以绘制时 resolve；`onNavigate({ destination, event })` 返回 `false` 表示由站点处理导航。
-2. 在 `views.js` 加一行：`{ id: 'blog', path: '/blog', passage: 'page', label, load: () => import('../blog/mount.js').then(m => m.mountBlog) }`。
+2. 在 `views.js` 加一行：`{ id: 'blog', path: '/blog', passage: 'page', title, label, load: () => import('../blog/mount.js').then(m => m.mountBlog) }`。
 3. 在导航里加一个 `<a href="/blog">`。点击、悬停预加载、火线转场、网址、前进后退、输入归属都会自动生效。
 4. 如果它的样式需要单独的文件，在 `index.html` 加 `<link>`，然后运行 `node scripts/stamp-versions.mjs`。
 

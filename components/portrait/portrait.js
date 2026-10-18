@@ -33,7 +33,8 @@ function loadImage(url) {
 // drawn between its heavier steps keeps the visible scene and cursor moving.
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
-export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }) {
+export async function initPortrait({ root, scene = 0, onSceneChange = () => {}, canWork = () => true }) {
+  const nextPiece = async () => { do await nextFrame(); while (!canWork()); };
   const settings = PORTRAIT_SETTINGS;
   const crownSignal = createMorseSignal('ELYXEE', settings.crownMorseUnit);
   const canvas = root.querySelector('#portrait-fx');
@@ -190,15 +191,15 @@ export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }
     const compositeProgram = makeProgram(COMPOSITE_FS);
     const imageTextures = [];
     for (const image of [dust, space, crowned, veiled]) {
-      await nextFrame();
+      await nextPiece();
       imageTextures.push(texture(image));
     }
-    await nextFrame();
+    await nextPiece();
     imageTextures.push(texture(createHaloTexture(crowned, veiled)));
-    await nextFrame();
+    await nextPiece();
     atmosphere = createAtmosphere(gl, space, ufo);
-    await nextFrame();
-    gallery = await createGallery(gl, crowned, veiled);
+    await nextPiece();
+    gallery = await createGallery(gl, crowned, veiled, { canWork });
     vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     quad = gl.createBuffer();
