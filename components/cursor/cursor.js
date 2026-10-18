@@ -715,6 +715,20 @@ function canvasVisible() {
     || fxCanvas.checkVisibility({ opacityProperty: true, visibilityProperty: true });
 }
 
+// Seed the flame where the pointer actually is — never at the assumed centre on
+// load — so the first visible frame cannot paint a flash at mid-screen.
+function seedPointer(x, y) {
+  pointer.x = x;
+  pointer.y = y;
+  pointer.previousX = x;
+  pointer.previousY = y;
+  rendered.x = x;
+  rendered.y = y;
+  pointer.initialized = true;
+  initFlame();
+  clearFx();
+}
+
 function onPointerMove(event) {
   if (!finePointer.matches || forcedColors.matches || event.pointerType === "touch") {
     return;
@@ -723,19 +737,7 @@ function onPointerMove(event) {
   const now = performance.now();
   const elapsedSeconds = clamp((now - pointer.lastEventAt) / 1000, 0.008, 0.08);
 
-  if (!pointer.initialized) {
-    // Seed the flame here — never at the assumed centre on load — so the first
-    // visible frame cannot paint a flash at mid-screen.
-    pointer.x = event.clientX;
-    pointer.y = event.clientY;
-    pointer.previousX = event.clientX;
-    pointer.previousY = event.clientY;
-    rendered.x = event.clientX;
-    rendered.y = event.clientY;
-    pointer.initialized = true;
-    initFlame();
-    clearFx();
-  }
+  if (!pointer.initialized) seedPointer(event.clientX, event.clientY);
 
   const fromX = pointer.previousX;
   const fromY = pointer.previousY;
@@ -913,6 +915,16 @@ requestAnimationFrame(animate);
 
 return {
   canvas: fxCanvas,
+  /**
+   * Lights the flame at a pointer position the host already knows, for when
+   * the pointer has been resting there while this canvas could not hear it.
+   */
+  wake(x, y) {
+    if (pointer.initialized || !finePointer.matches || forcedColors.matches) return;
+    seedPointer(x, y);
+    pointer.lastEventAt = performance.now();
+    setCursorVisibility(true);
+  },
   destroy() {
     setCursorVisibility(false);
   },

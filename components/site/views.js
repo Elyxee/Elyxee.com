@@ -10,7 +10,8 @@
 //          is another row here plus its own mount module.
 //
 // `below` names the page view that a scroll past the end of the stage opens.
-// `click` is the timing a nav click uses to reach a stage view.
+// `click` is the timing a nav click uses to reach a stage view. `title` is
+// optional; without one the tab keeps the site's own title (Elyxee).
 export const VIEWS = Object.freeze([
   Object.freeze({
     id: 'home', path: '/', passage: 'stage', position: 0,
@@ -22,8 +23,7 @@ export const VIEWS = Object.freeze([
     click: Object.freeze({ durationMs: 3200 }),
   }),
   Object.freeze({
-    id: 'about', path: '/about', passage: 'page',
-    title: 'About — Elyxee', label: 'About Elyxee',
+    id: 'about', path: '/about', passage: 'page', label: 'About Elyxee',
     load: () => import('../about/mount.js').then(module => module.mountAbout),
   }),
 ]);

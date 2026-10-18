@@ -95,8 +95,9 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
     [art.id, await loadGalleryImage(art.src)])));
   const sourceTextures = new Map(), hitMasks = new Map();
   const selection = createGallerySelection();
+  const textureKey = item => `${item.frameId}:${artworkFor(item)?.id ?? 'empty'}`;
   function textureFor(item) {
-    const art = artworkFor(item), key = `${item.frameId}:${art?.id ?? 'empty'}`;
+    const art = artworkFor(item), key = textureKey(item);
     if (sourceTextures.has(key)) return sourceTextures.get(key);
     const frame = frames.get(item.frameId);
     const image = art ? mountArtwork(frame, artworks.get(art.id), item) : frame;
@@ -135,7 +136,7 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
     }
   }
   const sequences = [0,1].map(scene => createGallerySequence(scene, contentByScene[scene]));
-  const visible = [[], []];
+  const visible = [[], []], laidOut = [false, false];
   const heads = [alphaMap(veiled), alphaMap(crowned)];
   const program = gl.createProgram(), shaders = [];
   for (const [type, source] of [[gl.VERTEX_SHADER, VS], [gl.FRAGMENT_SHADER, FS]]) {
@@ -192,11 +193,13 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
 
   function update(dt, pointer, scale, originX, originY, reduced, transition, scene, draw = true) {
     const view = { width, height, scale, originX, originY };
+    let unmade = 1;
     for (let targetScene=0; targetScene<2; targetScene++) {
       if (targetScene !== scene && !transition) continue;
       // Freeze the entire sequence clock, including any manual inertia. The
       // rest of the portrait keeps rendering and selection eases independently.
       visible[targetScene] = sequences[targetScene].update(selection.selected?.scene === targetScene ? 0 : dt,view,reduced);
+      laidOut[targetScene] = true;
       for (const item of visible[targetScene]) {
         const selected = selection.selected?.id === item.id ? 1 : 0;
         item.selection = reduced ? selected : (item.selection??0)+(selected-(item.selection??0))*(1-Math.exp(-dt*10));
@@ -211,8 +214,9 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
         item.hover += (hot-item.hover)*(1-Math.exp(-dt*7));
         item.pose = poseFor(item,scale,originX,originY);
         // Textures and hit masks are prepared on the same schedule while
-        // hidden, so input and the first visible frame find them ready.
-        if (!draw) textureFor(item);
+        // hidden, so input and the first visible frame find them ready. Each
+        // takes tens of milliseconds, so at most one is made per frame.
+        if (!draw && unmade && !sourceTextures.has(textureKey(item))) { textureFor(item); unmade--; }
       }
     }
     if (!draw) return;
@@ -249,6 +253,10 @@ export async function createGallery(gl, crowned, veiled, contentByScene = [[], [
   }
 
   return { textures: targets.map(t=>t.texture), resize, update, prepare,
+    /** Whether every frame now on screen in this scene has its texture. */
+    texturesReady(scene) {
+      return laidOut[scene] && visible[scene].every(item => sourceTextures.has(textureKey(item)));
+    },
     get selection() { return selection.selected; },
     clearSelection() { selection.clear(); },
     activate(item) {

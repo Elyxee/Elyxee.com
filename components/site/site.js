@@ -50,6 +50,7 @@ let inputEnabled = false;
 let current = "home";   // the view the site last settled on
 let owner = "home";     // the view receiving input; null while a page passage runs
 let loadingWheelUntil = 0;
+let queuedNavigation = null; // a nav click made while the opening still runs
 let previousFrameAt = performance.now();
 const preloadQueued = new Set();
 
@@ -61,12 +62,17 @@ const preloadQueued = new Set();
 // invisible burns before Home is ready.
 const handoff = createCursorHandoff();
 let pointerType = "mouse";
+let pointerInside = false;
 document.addEventListener("pointermove", event => {
   if (event.pointerType !== "touch") {
     handoff.setPointer(event.clientX, event.clientY);
     pointerType = event.pointerType;
+    pointerInside = true;
   }
   if (intro || owner !== "home") event.stopImmediatePropagation();
+});
+document.addEventListener("pointerout", event => {
+  if (!event.relatedTarget) pointerInside = false;
 });
 
 // --- curtain and opening -------------------------------------------------------
@@ -94,7 +100,7 @@ const inscriptions = [
   initBurnTypography({ settings: burn.settings, selector: ".burn-socials", artwork: true, measureRect: burnLayoutRect }),
 ];
 Promise.allSettled(inscriptions).then(() => depth.mountInscriptions());
-initCursor();
+const cursor = initCursor();
 
 const everythingReady = waitForOpening({
   scene: burn.ready,
@@ -223,6 +229,7 @@ function apply(dt) {
     scenes.home.setVisible(!(pv >= 1 || page?.settled));
     scenes.portfolio.setVisible(pv > 0 && !page?.settled);
   }
+  scenes.home.setPassing(Boolean(intro) || (pv > 0 && pv < 1) || Boolean(page && !page.settled));
 
   const view = page?.settled ? page.view.id : intro ? "intro" : pv <= 0.02 ? "burn" : pv >= 0.98 ? "portrait" : "transit";
   if (html.dataset.stage !== view) html.dataset.stage = view;
@@ -261,6 +268,14 @@ function finishIntro() {
   intro = null;
   stage.jump(0);
   inputEnabled = true;
+  // The flame lights where the pointer already rests, rather than waiting for
+  // it to move, and a link clicked during the reveal is followed now.
+  if (pointerInside && handoff.pointer.seen && document.hasFocus()) cursor.wake(handoff.pointer.x, handoff.pointer.y);
+  if (queuedNavigation) {
+    const id = queuedNavigation;
+    queuedNavigation = null;
+    navigate(id);
+  }
   // The portrait mounts once the opening is over so its texture work never
   // competes with the receding fire.
   setTimeout(() => {
@@ -341,13 +356,17 @@ nav?.addEventListener('click', event => {
   const link = event.target.closest('a[href]');
   if (!link || !plainClick(event)) return;
   event.preventDefault();
-  navigate(viewFromPath(new URL(link.href).pathname));
+  const id = viewFromPath(new URL(link.href).pathname);
+  if (intro) queuedNavigation = id;
+  else navigate(id);
 });
 for (const link of nav?.querySelectorAll('a[href]') ?? []) {
   const id = viewFromPath(new URL(link.href).pathname);
   if (viewById(id)?.passage !== "page") continue;
-  link.addEventListener('pointerenter', () => pages[id].preload());
-  link.addEventListener('focus', () => pages[id].preload());
+  // Not during the opening: setting a page up would stall the receding fire.
+  const preloadPage = () => { if (!intro) pages[id].preload(); };
+  link.addEventListener('pointerenter', preloadPage);
+  link.addEventListener('focus', preloadPage);
 }
 
 window.addEventListener("keydown", event => {

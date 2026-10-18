@@ -529,6 +529,10 @@ export function initBurn(options = {}) {
   // renderer through its remaining tail instead of dropping it on reignition.
   let recoveryVisualMix = 0;
   let sampleAccum = 0;
+  // While the host animates over the sheet the GPU is busy with that work, and
+  // even a fenced readback then waits behind it, stalling the whole page.
+  // Samples are held meanwhile; the next one is taken as soon as it ends.
+  let samplesHeld = false;
   let lastDamageSample = null;
   let recoveryTailMean = 1;
   let recoveryHoldRemaining = 0;
@@ -889,8 +893,8 @@ export function initBurn(options = {}) {
     pointer.previousY = pointer.y;
 
     sampleAccum += deltaSeconds;
-    let sample = collectSheetSample();
-    if (!sample && !metricsFence && sampleAccum >= 0.45) {
+    let sample = samplesHeld ? null : collectSheetSample();
+    if (!sample && !samplesHeld && !metricsFence && sampleAccum >= 0.45) {
       sampleAccum = 0;
       sample = requestSheetSample();
     }
@@ -991,6 +995,9 @@ export function initBurn(options = {}) {
     },
     pause() {
       running = false;
+    },
+    holdSamples(held) {
+      samplesHeld = Boolean(held);
     },
     resume() {
       previousFrameAt = performance.now();

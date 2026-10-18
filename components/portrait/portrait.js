@@ -18,14 +18,20 @@ const ASSETS = {
 export { ASSETS as PORTRAIT_ASSETS };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+// Decoded off the main thread before any canvas or texture reads it, so the
+// setup below never decodes a large picture in the middle of a frame.
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    image.onload = () => resolve(image);
+    image.onload = () => image.decode().catch(() => {}).then(() => resolve(image));
     image.onerror = () => reject(new Error(`Unable to load portrait asset: ${url}`));
     image.src = url;
   });
 }
+
+// Setup runs once, behind Home or the static composition. Letting a frame be
+// drawn between its heavier steps keeps the visible scene and cursor moving.
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
 export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }) {
   const settings = PORTRAIT_SETTINGS;
@@ -182,9 +188,16 @@ export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }
     const [dust, space, crowned, veiled, ufo] = await Promise.all(Object.values(ASSETS).map(loadImage));
     const fluidProgram = makeProgram(FLUID_FS);
     const compositeProgram = makeProgram(COMPOSITE_FS);
-    const imageTextures = [texture(dust), texture(space), texture(crowned), texture(veiled),
-      texture(createHaloTexture(crowned, veiled))];
+    const imageTextures = [];
+    for (const image of [dust, space, crowned, veiled]) {
+      await nextFrame();
+      imageTextures.push(texture(image));
+    }
+    await nextFrame();
+    imageTextures.push(texture(createHaloTexture(crowned, veiled)));
+    await nextFrame();
     atmosphere = createAtmosphere(gl, space, ufo);
+    await nextFrame();
     gallery = await createGallery(gl, crowned, veiled);
     vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -295,11 +308,13 @@ export async function initPortrait({ root, scene = 0, onSceneChange = () => {} }
         transition.elapsed += dt;
         progress = clamp(transition.elapsed / transition.duration, 0, 1);
       }
-      const render = visible || !ready;
+      // The first frame is drawn once its gallery textures exist; until then
+      // they are made one per frame, as while hidden, not all at once.
+      const render = ready ? visible : gallery.texturesReady(activeScene);
       atmosphere.update(dt, elapsed, pointer, scale, reduced.matches, transition, activeScene, render);
       gallery.update(dt, pointer, scale, originX, originY, reduced.matches, transition, activeScene, render);
       if (render) composite(progress);
-      if (!ready) { ready = true; root.classList.add('is-ready'); }
+      if (render && !ready) { ready = true; root.classList.add('is-ready'); }
       if (transition && progress >= 1) {
         const finished = transition;
         activeScene = finished.to;

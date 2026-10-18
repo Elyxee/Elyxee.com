@@ -36,6 +36,8 @@ export function createHomeScene({ layer, burn }) {
       // The sheet re-lights on the next real pointer movement, not here.
       if (!on) burn.setPointerActive?.(false);
     },
+    /** While the opening or a passage animates over Home, its GPU readbacks wait. */
+    setPassing(on) { burn.holdSamples?.(on); },
     destroy() { burn.destroy?.(); },
   };
 }

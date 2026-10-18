@@ -30,12 +30,21 @@ body {
   contain: paint;
 }
 
+/* One full-viewport box per inscription, so each carries its own small lens. */
+.stage-inscriptions__mark {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
 /* The burn layer carries the Fire.jpg first-paint underlay so its WebGL frame
    and the sheet beneath it are still one picture. */
 .stage--burn {
   z-index: 1;
   background: #0d0b09 url("../../Assets/optimized/home-fire.webp") center / cover no-repeat;
 }
+/* The opaque WebGL frame covers the underlay completely once it is up. */
+.stage--burn:has(> #burn-fx.is-ready) { background-image: none; }
 
 /* Appears only if both the delivery asset and its original fallback fail. */
 .site-load-retry {

@@ -5,7 +5,7 @@
 // owns input. During the opening the coordinator sets the progress directly.
 
 import { createTransitionMotion } from './transition-motion.js';
-import { edgeHeightAt, FIRE_EDGE, portraitClip, portraitShare } from './transition-front.js';
+import { edgeHeightAt, FIRE_EDGE, portraitClip, portraitShare, seamRange } from './transition-front.js';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -79,8 +79,10 @@ export function createStagePassage({ burnLayer, portraitLayer, portraitRoot, cur
         html.style.setProperty('--burn-pointer-opacity', 1-smoothstep(.12,.46,pv));
       }
 
+      // The seam bounds what can be seen of each scene, and so its lens.
       depth.set(intro || reduced.matches ? 0 : 1 - v.burnScale,
-        intro || reduced.matches ? 0 : 1 - v.portraitScale);
+        intro || reduced.matches ? 0 : 1 - v.portraitScale,
+        !intro && pv > 0 && pv < 1 ? seamRange(v.edge, time) : null);
 
       // Climbing fire leads with flames; sinking fire leads with soot and ash.
       const edgeVelocity = dt > 0 ? (v.edge - lastEdge) / dt : 0;

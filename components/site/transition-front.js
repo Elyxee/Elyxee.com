@@ -34,6 +34,16 @@ export function portraitClip(edge, time) {
   return `polygon(${points.join(',')},100% 100%,0% 100%)`;
 }
 
+/** The highest and lowest point of portraitClip's seam, as viewport fractions. */
+export function seamRange(edge, time) {
+  let top = 1, bottom = 0;
+  for (let i=0; i<=256; i++) {
+    const y = clamp(1-paperEdgeHeightAt(i/256,edge,1,time));
+    top = Math.min(top, y); bottom = Math.max(bottom, y);
+  }
+  return [top, bottom];
+}
+
 export function portraitShare(progress, time = 0) {
   const edge = FIRE_EDGE.hidden + (FIRE_EDGE.full-FIRE_EDGE.hidden)*progress;
   let area = 0;

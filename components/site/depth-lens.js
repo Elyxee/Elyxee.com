@@ -15,6 +15,22 @@ export function depthChannel(position, axisFraction) {
   return Math.round(255 * (.5 + depthOffset(position) * axisFraction + inward));
 }
 
+// The largest shift any field texel asks for, as a share of the filter scale.
+const MAX_SHIFT = Math.max(...Array.from({ length: 256 }, (_, i) => Math.abs(depthChannel(i / 255, 1) / 255 - .5)));
+
+/** How far, in CSS pixels, the pull-back can move any pixel at this scale. */
+export function depthReach(scale) {
+  return Math.ceil(scale * MAX_SHIFT) + 2;
+}
+
+// Every displaced element is a fixed, full-viewport box, so all filters share
+// one coordinate space and one viewport-sized field. The work a filter costs
+// follows the area of its region, so each region covers only what can be seen
+// of its element: the burn scene above the fire seam, the portrait below it,
+// and each inscription where it is drawn. A pixel inside a region is computed
+// exactly as with a full-viewport region when the region's edges lie on the
+// field's texel grid and extend past the visible part by the largest shift
+// (its samples then stay inside it).
 export function createDepthLens(burnLayer, portraitLayer) {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('aria-hidden','true');
@@ -24,7 +40,13 @@ export function createDepthLens(burnLayer, portraitLayer) {
   inscriptions.className = 'stage-inscriptions';
   inscriptions.setAttribute('aria-hidden','true');
   document.body.append(svg, inscriptions);
-  const filters = ['burn','portrait'].map(name => {
+  const setRect = (element, [x, y, width, height]) => {
+    for (const [key, value] of [['x',x],['y',y],['width',width],['height',height]]) {
+      const text = String(value);
+      if (element.getAttribute(key) !== text) element.setAttribute(key, text);
+    }
+  };
+  function makeLens(name, element) {
     const filter = document.createElementNS(NS,'filter');
     filter.id = `depth-${name}`;
     for (const [key,value] of Object.entries({x:0,y:0,filterUnits:'userSpaceOnUse',primitiveUnits:'userSpaceOnUse', 'color-interpolation-filters':'sRGB'}))
@@ -36,54 +58,104 @@ export function createDepthLens(burnLayer, portraitLayer) {
     for (const [key,value] of Object.entries({in:'SourceGraphic',in2:'field',scale:0,xChannelSelector:'R',yChannelSelector:'G'}))
       displacement.setAttribute(key,value);
     filter.append(image,displacement); defs.append(filter);
-    return {filter,image,displacement,active:false,scale:null};
-  });
-  let longest = 1;
+    return { element, filter, image, displacement };
+  }
+  const lenses = [makeLens('burn', burnLayer), makeLens('portrait', portraitLayer)];
+  // Each inscription sits in its own full-viewport wrapper with its own lens;
+  // `box` is where it draws, measured each time its lens switches on.
+  const marks = [];
+  const groups = [
+    { lenses: () => [lenses[0], ...marks], active: false, scale: null, amount: 0 },
+    { lenses: () => [lenses[1]], active: false, scale: null, amount: 0 },
+  ];
+  let width = 1, height = 1, longest = 1, field = '';
+
   function resize() {
-    const w=innerWidth,h=innerHeight; longest=Math.max(w,h);
+    width=innerWidth; height=innerHeight; longest=Math.max(width,height);
     const map=document.createElement('canvas'); map.width=map.height=256;
     const ctx=map.getContext('2d'); const pixels=ctx.createImageData(256,256);
     for(let y=0;y<256;y++) for(let x=0;x<256;x++) {
       const i=(y*256+x)*4;
-      pixels.data[i]=depthChannel(x/255,w/longest);
-      pixels.data[i+1]=depthChannel(y/255,h/longest);
+      pixels.data[i]=depthChannel(x/255,width/longest);
+      pixels.data[i+1]=depthChannel(y/255,height/longest);
       pixels.data[i+2]=128; pixels.data[i+3]=255;
     }
     ctx.putImageData(pixels,0,0);
-    const url=map.toDataURL();
-    filters.forEach(({filter,image,displacement})=>{
-      // Bind every primitive to the same viewport-sized sampling surface.
-      // Canvas padding outside the screen must not expand or offset it.
-      for(const primitive of [filter,image,displacement]) {
-        primitive.setAttribute('x','0'); primitive.setAttribute('y','0');
-        primitive.setAttribute('width',w); primitive.setAttribute('height',h);
-      }
-      image.setAttribute('href',url);
-    });
+    field=map.toDataURL();
+    // Bind every field to the same viewport-sized sampling surface. Canvas
+    // padding outside the screen must not expand or offset it.
+    for (const lens of [...lenses, ...marks]) {
+      setRect(lens.image, [0, 0, width, height]);
+      lens.image.setAttribute('href', field);
+      lens.region = null;
+      lens.box = null;
+    }
+    groups.forEach(group => { group.scale = null; });
   }
   resize(); window.addEventListener('resize',resize,{passive:true});
-  function apply(element,amount,index) {
-    const active=amount>.0005, entry=filters[index];
-    if(active!==entry.active) {
-      entry.active=active;
-      const filter=active ? `url(#depth-${index ? 'portrait' : 'burn'})` : '';
-      element.style.filter=filter;
-      if(!index) inscriptions.style.filter=filter;
+
+  function place(lens, [x, y, w, h]) {
+    const tx = width / 256, ty = height / 256;
+    const left = Math.floor(x / tx) * tx, top = Math.floor(y / ty) * ty;
+    const region = [left, top, Math.ceil((x + w) / tx) * tx - left, Math.ceil((y + h) / ty) * ty - top];
+    const key = region.join();
+    if (lens.region === key) return;
+    lens.region = key;
+    setRect(lens.filter, region);
+    setRect(lens.displacement, region);
+  }
+
+  // `seam` is the vertical extent [top, bottom] of the fire seam as viewport
+  // fractions, or null when no seam divides the screen.
+  function apply(index, amount, seam) {
+    const group = groups[index], active = amount > .0005;
+    if (active !== group.active) {
+      group.active = active;
+      for (const lens of group.lenses()) {
+        lens.box = null;
+        lens.element.style.filter = active ? `url(#${lens.filter.id})` : '';
+      }
     }
-    const scale=(longest*amount).toFixed(3);
-    if(active && entry.scale!==scale) {
-      entry.scale=scale;
-      entry.displacement.setAttribute('scale',scale);
+    if (!active) return;
+    const scale = (longest*amount).toFixed(3);
+    if (group.scale !== scale) {
+      group.scale = scale;
+      for (const lens of group.lenses()) lens.displacement.setAttribute('scale', scale);
+    }
+    const reach = depthReach(+scale);
+    // Burn above the seam, portrait below it; the whole viewport otherwise.
+    const top = index && seam ? Math.max(0, seam[0] * height - reach) : 0;
+    const bottom = !index && seam ? Math.min(height, seam[1] * height + reach) : height;
+    for (const lens of group.lenses()) {
+      if (lens.canvas && !lens.box) {
+        const r = lens.canvas.getBoundingClientRect();
+        lens.box = [r.left, r.top, r.right, r.bottom];
+      }
+      if (lens.box) {
+        const [left, boxTop, right, boxBottom] = lens.box;
+        place(lens, [left - reach, boxTop - reach, right - left + 2 * reach, boxBottom - boxTop + 2 * reach]);
+      } else {
+        place(lens, [0, top, width, Math.max(0, bottom - top)]);
+      }
     }
   }
   return {
     mountInscriptions() {
-      document.querySelectorAll('.burn-mark__material').forEach(canvas=>inscriptions.append(canvas));
+      document.querySelectorAll('.burn-mark__material').forEach((canvas, i) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'stage-inscriptions__mark';
+        wrapper.append(canvas);
+        inscriptions.append(wrapper);
+        const mark = Object.assign(makeLens(`mark-${i}`, wrapper), { canvas, box: null });
+        setRect(mark.image, [0, 0, width, height]);
+        mark.image.setAttribute('href', field);
+        marks.push(mark);
+      });
     },
-    set(burnAmount,portraitAmount) { apply(burnLayer,burnAmount,0); apply(portraitLayer,portraitAmount,1); },
+    set(burnAmount, portraitAmount, seam = null) { apply(0, burnAmount, seam); apply(1, portraitAmount, seam); },
     destroy() {
       window.removeEventListener('resize',resize);
-      [...inscriptions.children].forEach(canvas=>document.body.append(canvas));
+      marks.forEach(mark => document.body.append(mark.canvas));
       inscriptions.remove(); svg.remove(); burnLayer.style.filter=''; portraitLayer.style.filter='';
     },
   };

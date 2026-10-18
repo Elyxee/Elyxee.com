@@ -31,6 +31,9 @@ export async function prefetchPortrait() {
   }
 }
 
+// Lets a frame be drawn between pieces of setup work.
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
 // While the portrait loads, its static composition shows each image only once
 // it has fully arrived, eased in, rather than drawing it half-downloaded.
 function revealWhenLoaded(image) {
@@ -126,6 +129,7 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
   // Keep the same frame composition available during loading and without WebGL.
   const composition = root.querySelector('.portrait__composition');
   const backFrames = document.createDocumentFragment();
+  const mounts = [];
   for (const item of FRAME_ITEMS) {
     if (item.initial === false) continue;
     const image = new Image();
@@ -140,18 +144,27 @@ export async function mountPortrait({ root, scene = 1, onHome }) {
     backFrames.appendChild(image);
     const entry = { ...item, frameId: item.id,
       contentIndex: GALLERY_SEQUENCES[item.scene].frames.indexOf(item.id) };
-    gallerySource(entry).then(source => {
-      if (!(source instanceof HTMLCanvasElement)) return;
-      const canvas = document.createElement('canvas');
-      canvas.width = source.width; canvas.height = source.height;
-      canvas.getContext('2d').drawImage(source, 0, 0);
-      canvas.className = 'portrait__gallery-frame is-loaded';
-      canvas.dataset.scene = image.dataset.scene;
-      canvas.style.cssText = image.style.cssText;
-      image.replaceWith(canvas);
-    }).catch(error => console.error('Frame artwork:', error));
+    mounts.push({ entry, image });
   }
   composition.prepend(backFrames);
+  // Covers are mounted into their frames one per frame, not all in one task:
+  // each takes tens of milliseconds and would otherwise stall the page at once.
+  (async () => {
+    for (const { entry, image } of mounts) {
+      await nextFrame();
+      try {
+        const source = await gallerySource(entry);
+        if (!(source instanceof HTMLCanvasElement)) continue;
+        const canvas = document.createElement('canvas');
+        canvas.width = source.width; canvas.height = source.height;
+        canvas.getContext('2d').drawImage(source, 0, 0);
+        canvas.className = 'portrait__gallery-frame is-loaded';
+        canvas.dataset.scene = image.dataset.scene;
+        canvas.style.cssText = image.style.cssText;
+        image.replaceWith(canvas);
+      } catch (error) { console.error('Frame artwork:', error); }
+    }
+  })();
 
   let effect = null;
   try {

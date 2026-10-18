@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { depthChannel, depthOffset } from '../../components/site/depth-lens.js';
+import { depthChannel, depthOffset, depthReach } from '../../components/site/depth-lens.js';
 
 test('pull-back keeps its centre and mathematical perimeter anchored', () => {
   for (const position of [0,.5,1]) assert.equal(Math.abs(depthOffset(position)),0);
@@ -23,6 +23,19 @@ test('quantized sampling never exposes the background or folds the image', () =>
         assert.ok(sample>=0 && sample<=axis, `${width}×${height}: edge ${i} escaped`);
         assert.ok(sample>previous, `${width}×${height}: image folded at ${i}`);
         previous=sample;
+      }
+    }
+  }
+});
+
+test('a lens region reaches past everything the field can shift into view', () => {
+  for (const [width,height] of [[1376,774],[1920,1080],[393,852],[3440,1440]]) {
+    const longest=Math.max(width,height);
+    for (const amount of [.01,.05,.075]) {
+      const scale=longest*amount;
+      for (const axis of [width,height]) for (let i=0;i<=255;i++) {
+        const shift=Math.abs(scale*(depthChannel(i/255,axis/longest)/255-.5));
+        assert.ok(shift<=depthReach(scale)-1, `${width}×${height} at ${amount}: shift ${shift} exceeds reach`);
       }
     }
   }

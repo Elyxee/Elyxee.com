@@ -25,6 +25,9 @@ body { font-family: Arial, sans-serif; }
 [data-scene="space"] .portrait__head--crowned { display: block; }
 #portrait-fx { display: block; opacity: 0; pointer-events: none; transition: opacity .6s ease; }
 .portrait.is-ready #portrait-fx { opacity: 1; }
+/* Once the opaque effect has faded in, the composition under it is never seen;
+   stop compositing it (and re-rastering its images through every passage). */
+.portrait.is-ready .portrait__fallback { visibility: hidden; transition: visibility 0s .6s; }
 @font-face {
   font-family: PortraitNarri;
   src: url('../../Assets/Font/narri-regular.woff2') format('woff2');

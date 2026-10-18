@@ -55,16 +55,19 @@ function apertureFor(frame) {
   queue[0] = Math.floor(height / 2) * width + Math.floor(width / 2);
   inside[queue[0]] = 1;
   let left = width, top = height, right = 0, bottom = 0;
+  const visit = n => {
+    if (inside[n] || pixels.data[n * 4 + 3] >= 128) return;
+    inside[n] = 1; queue[tail++] = n;
+  };
   // Flood only the enclosed center. Decorative gaps outside the frame stay clear.
   while (head < tail) {
     const p = queue[head++], x = p % width, y = Math.floor(p / width);
     left = Math.min(left, x); right = Math.max(right, x);
     top = Math.min(top, y); bottom = Math.max(bottom, y);
-    for (const n of [x > 0 ? p - 1 : -1, x < width - 1 ? p + 1 : -1,
-      y > 0 ? p - width : -1, y < height - 1 ? p + width : -1]) {
-      if (n < 0 || inside[n] || pixels.data[n * 4 + 3] >= 128) continue;
-      inside[n] = 1; queue[tail++] = n;
-    }
+    if (x > 0) visit(p - 1);
+    if (x < width - 1) visit(p + 1);
+    if (y > 0) visit(p - width);
+    if (y < height - 1) visit(p + width);
   }
   if (!left || !top || right === width - 1 || bottom === height - 1) {
     throw new Error('Frame artwork aperture is not enclosed');

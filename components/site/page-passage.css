@@ -6,7 +6,9 @@
   visibility: hidden;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* No rubber band at either end: the top is where the passage back begins,
+     and a bounce there pulls the page off its black ground. */
+  overscroll-behavior: none;
   touch-action: pan-y;
   background: #050403;
   outline: none;
